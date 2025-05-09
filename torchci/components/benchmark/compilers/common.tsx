@@ -57,20 +57,28 @@ export const HELP_LINK =
 
 export const DTYPES = ["amp", "float16", "bfloat16", "quant", "notset"];
 
-export const DEFAULT_DEVICE_NAME = "cuda (a100)";
+export const DEFAULT_DEVICE_NAME = "cuda (h100)";
 // TODO (huydhn): there is a way to avoid hard-coding dtypes and devices like how
 // the LLM micro-benchmark page is implemented
 export const DISPLAY_NAMES_TO_DEVICE_NAMES: { [k: string]: string } = {
   "cuda (a100)": "cuda",
-  "cuda (a10g)": "cuda_a10g",
+  "cuda (h100)": "cuda_h100",
   "cpu (x86)": "cpu_x86",
   "cpu (aarch64)": "cpu_aarch64",
+  "rocm (mi300x)": "rocm",
   mps: "mps",
 };
 export const DISPLAY_NAMES_TO_WORKFLOW_NAMES: { [k: string]: string } = {
   "cuda (a100)": "inductor-A100-perf-nightly",
-  "cuda (a10g)": "inductor-perf-nightly-A10g",
+  "cuda (h100)": "inductor-perf-nightly-h100",
   "cpu (x86)": "inductor-perf-nightly-x86",
   "cpu (aarch64)": "inductor-perf-nightly-aarch64",
+  rocm: "inductor-perf-nightly-rocm",
   mps: "inductor-perf-nightly-macos",
+};
+
+export const DEFAULT_HIGHLIGHT_KEY = "none";
+export const DISPLAY_KEYS_TO_HIGHLIGHT: { [k: string]: string } = {
+  None: DEFAULT_HIGHLIGHT_KEY,
+  Max_autotune: "max_autotune",
 };

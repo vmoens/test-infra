@@ -8,15 +8,17 @@ export interface Repo {
 export interface RunnerInfo {
   applicationDeployDatetime?: string;
   awsRegion: string;
+  az?: string;
+  ebsVolumeReplacementRequestTimestamp?: number;
   environment?: string;
+  ephemeralRunnerFinished?: number;
   ghRunnerId?: string;
   instanceId: string;
+  instanceManagement?: string;
   launchTime?: Date;
   org?: string;
   repo?: string;
   runnerType?: string;
-  instanceManagement?: string;
-  az?: string;
 }
 
 export function getRepoKey(repo: Repo): string {
@@ -161,4 +163,8 @@ export function shuffleArrayInPlace<T>(arr: T[]): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+export function sleep(time: number | undefined) {
+  return new Promise((resolve) => setTimeout(resolve, time));
 }

@@ -215,6 +215,8 @@ The explanation needs to be clear on why this is needed. Here are some good exam
               delete latest_reviews[curr_review.user.login];
               break;
             case PR_CHANGES_REQUESTED:
+              latest_reviews[curr_review.user.login] = curr_review.state;
+              break;
             case PR_APPROVED:
               latest_reviews[curr_review.user.login] = curr_review.state;
               break;
@@ -231,10 +233,15 @@ The explanation needs to be clear on why this is needed. Here are some good exam
 
     // Aggregate the reviews to figure out the overall status.
     // One approval is all that's needed
+    // If there are any changes requested, the status is changes requested
     let approval_status = "";
     for (let [_, review_state] of Object.entries(latest_reviews)) {
       if (review_state.toLocaleLowerCase() == PR_APPROVED) {
         approval_status = review_state;
+      } else if (review_state.toLocaleLowerCase() == PR_CHANGES_REQUESTED) {
+        // If there are any changes requested, we exit early and just return changes requested
+        approval_status = review_state;
+        break;
       }
     }
 
@@ -268,7 +275,10 @@ The explanation needs to be clear on why this is needed. Here are some good exam
     } else if (isPyTorchOrg(this.owner)) {
       // Ensure the PR has been signed off on
       let approval_status = await this.getApprovalStatus();
-      if (approval_status !== PR_APPROVED) {
+      if (approval_status == PR_CHANGES_REQUESTED) {
+        rejection_reason =
+          "This PR has pending changes requested. Please address the comments and update the PR before merging.";
+      } else if (approval_status !== PR_APPROVED) {
         rejection_reason =
           "This PR needs to be approved by an authorized maintainer before merge.";
       }
@@ -532,9 +542,13 @@ The explanation needs to be clear on why this is needed. Here are some good exam
     is_pr_comment: boolean = true
   ) {
     let args;
+    let split_args: string[] = [];
+
     try {
       const parser = getParser();
-      args = parser.parse_args(shlex.split(inputArgs));
+
+      split_args = shlex.split(inputArgs);
+      args = parser.parse_args(split_args);
     } catch (err: any) {
       // If the args are invalid, comment with the error + some help.
       await this.addComment(
@@ -546,7 +560,12 @@ The explanation needs to be clear on why this is needed. Here are some good exam
       return;
     }
 
-    if (args.help) {
+    // if help is present as an option on the main command, or -h or --help is in any location in the args (parseargs fails to get -h at the start of the args)
+    if (
+      args.help ||
+      split_args.includes("-h") ||
+      split_args.includes("--help")
+    ) {
       return await this.addComment(getHelp());
     }
 

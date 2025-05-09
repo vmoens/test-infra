@@ -1,4 +1,4 @@
-import { Divider, Grid, Skeleton, Stack, Typography } from "@mui/material";
+import { Divider, Grid2, Skeleton, Stack, Typography } from "@mui/material";
 import { BranchAndCommitPicker } from "components/benchmark/BranchAndCommitPicker";
 import { CommitPanel } from "components/benchmark/CommitPanel";
 import {
@@ -29,8 +29,10 @@ import CopyLink from "components/CopyLink";
 import GranularityPicker from "components/GranularityPicker";
 import { Granularity } from "components/metrics/panels/TimeSeriesPanel";
 import dayjs from "dayjs";
-import { convertToCompilerPerformanceData } from "lib/benchmark/aoUtils";
-import { augmentData } from "lib/benchmark/compilerUtils";
+import {
+  augmentData,
+  convertToCompilerPerformanceData,
+} from "lib/benchmark/compilerUtils";
 import { fetcher } from "lib/GeneralUtils";
 import { BranchAndCommit, CompilerPerformanceData } from "lib/types";
 import { useRouter } from "next/router";
@@ -393,7 +395,7 @@ export default function Page() {
         />
       </Stack>
 
-      <Grid item xs={12}>
+      <Grid2 size={{ xs: 12 }}>
         <Report
           dashboard={dashboard}
           queryName={queryName}
@@ -410,7 +412,7 @@ export default function Page() {
           lBranchAndCommit={{ branch: lBranch, commit: lCommit }}
           rBranchAndCommit={{ branch: rBranch, commit: rCommit }}
         />
-      </Grid>
+      </Grid2>
     </div>
   );
 }

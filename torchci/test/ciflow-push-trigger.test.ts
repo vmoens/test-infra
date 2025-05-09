@@ -1,8 +1,23 @@
 import ciflowPushTrigger from "lib/bot/ciflowPushTrigger";
 import nock from "nock";
 import { Probot, ProbotOctokit } from "probot";
+import {
+  mockApprovedWorkflowRuns,
+  mockHasApprovedWorkflowRun,
+  mockPermissions,
+} from "./utils";
 
 nock.disableNetConnect();
+
+function mockDeleteLabel(repoFullName: string, number: number, label: string) {
+  return nock("https://api.github.com")
+    .delete(
+      `/repos/${repoFullName}/issues/${number}/labels/${encodeURIComponent(
+        label
+      )}`
+    )
+    .reply(200);
+}
 
 describe("Push trigger integration tests", () => {
   let probot: Probot;
@@ -179,6 +194,8 @@ describe("Push trigger integration tests", () => {
       "ciflow/1",
     ];
 
+    mockHasApprovedWorkflowRun(payload.repository.full_name);
+
     for (const label of labels) {
       nock("https://api.github.com")
         .get(
@@ -216,6 +233,31 @@ describe("Push trigger integration tests", () => {
         })
         .reply(200);
     }
+    await probot.receive({ name: "pull_request", id: "123", payload });
+  });
+
+  test("synchronization of PR requires permissions", async () => {
+    const payload = require("./fixtures/push-trigger/pull_request.synchronize");
+    mockApprovedWorkflowRuns(
+      payload.repository.full_name,
+      payload.pull_request.head.sha,
+      false
+    );
+    mockPermissions(
+      payload.repository.full_name,
+      payload.pull_request.user.login,
+      "read"
+    );
+    mockDeleteLabel(
+      payload.repository.full_name,
+      payload.pull_request.number,
+      "ciflow/test"
+    );
+    mockDeleteLabel(
+      payload.repository.full_name,
+      payload.pull_request.number,
+      "ciflow/1"
+    );
     await probot.receive({ name: "pull_request", id: "123", payload });
   });
 

@@ -4,18 +4,19 @@ SELECT
         workflow.created_at
     ) AS granularity_bucket,
     workflow.name,
-    COUNT(*) as count
+    COUNT(*) AS count
 FROM
-    default.workflow_run workflow final
+    default.workflow_run workflow FINAL
 WHERE
     -- optimization to make query faster
-    workflow.id in (
-        select id from materialized_views.workflow_run_by_created_at
-        where created_at >= {startTime: DateTime64(9)}
-        AND created_at <= {stopTime: DateTime64(9)}
+    workflow.id IN (
+        SELECT id FROM materialized_views.workflow_run_by_created_at
+        WHERE
+            created_at >= {startTime: DateTime64(9)}
+            AND created_at <= {stopTime: DateTime64(9)}
     )
     -- re check for final
-    and workflow.created_at >= {startTime: DateTime64(9)}
+    AND workflow.created_at >= {startTime: DateTime64(9)}
     AND workflow.created_at <= {stopTime: DateTime64(9)}
     AND workflow.name IN (
         'pull',
@@ -28,9 +29,11 @@ WHERE
         'inductor-A100-perf-nightly',
         'inductor-cu124',
         'rocm',
-        'inductor-rocm'
+        'rocm-mi300',
+        'inductor-rocm',
+        'inductor-rocm-mi300'
     )
-    AND workflow.repository.'full_name' like {repo: String}
+    AND workflow.repository.'full_name' LIKE {repo: String}
 GROUP BY
     granularity_bucket,
     workflow.name

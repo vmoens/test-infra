@@ -49,9 +49,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(inputs.build-matrix) }}
     timeout-minutes: 30
-    name: ${{ matrix.build_name }}
-    env:
-      DO_UPLOAD: ${{ contains(matrix.validation_runner, 'windows') || contains(matrix.validation_runner, 'macos') || contains(matrix.container_image, '2_28') || contains(matrix.container_image, 'manylinuxaarch64-builder:cuda') }}
+    name: upload-${{ matrix.build_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,8 +70,7 @@ jobs:
           upload-to-base-bucket: ${{ matrix.upload_to_base_bucket }}
 
       - name: Download the artifact
-        if: ${{ env.DO_UPLOAD == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ inputs.repository }}/dist/
@@ -100,7 +97,6 @@ jobs:
           echo "NIGHTLY_OR_TEST=1" >> "${GITHUB_ENV}"
 
       - name: Upload package to pytorch.org
-        if: ${{ env.DO_UPLOAD == 'true' }}
         shell: bash
         working-directory: ${{ inputs.repository }}
         run: |
@@ -117,11 +113,13 @@ jobs:
           fi
 
           for pkg in dist/*; do
-            ${AWS_CMD} "$pkg" "${PYTORCH_S3_BUCKET_PATH}" --acl public-read
+            shm_id=$(sha256sum "${pkg}" | awk '{print $1}')
+            ${AWS_CMD} "$pkg" "${PYTORCH_S3_BUCKET_PATH}" --acl public-read \
+              --metadata "checksum-sha256=${shm_id}"
           done
 
       - name: Upload package to pypi
-        if: ${{ env.DO_UPLOAD == 'true' && env.NIGHTLY_OR_TEST == '1' && contains(inputs.upload-to-pypi, matrix.desired_cuda) }}
+        if: ${{ env.NIGHTLY_OR_TEST == '1' && contains(inputs.upload-to-pypi, matrix.desired_cuda) }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__

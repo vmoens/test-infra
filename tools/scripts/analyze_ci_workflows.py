@@ -2,7 +2,6 @@
 
 import argparse
 import collections
-
 import re
 import typing
 
@@ -47,7 +46,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def do_analysis(
-    name: str, workflow_jobs: typing.List[str], job_types: typing.Dict[str, re.Pattern]
+    name: str,
+    workflow_jobs: typing.List[str],
+    job_types: typing.Dict[str, re.Pattern],  # type: ignore[type-arg]
 ) -> None:
     analysis = collections.defaultdict(int)
     for workflow_job in workflow_jobs:

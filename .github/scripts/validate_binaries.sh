@@ -1,4 +1,5 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+export DESIRED_DEVTOOLSET="cxx11-abi"
 
 if [[ ${MATRIX_PACKAGE_TYPE} == "libtorch" ]]; then
     curl ${MATRIX_INSTALLATION} -o libtorch.zip
@@ -20,15 +21,15 @@ else
         # Conda pinned see issue: https://github.com/ContinuumIO/anaconda-issues/issues/13350
         conda install -y conda=23.11.0
     fi
-    # Please note ffmpeg is required for torchaudio, see https://github.com/pytorch/pytorch/issues/96159
-    conda create -y -n ${ENV_NAME} python=${MATRIX_PYTHON_VERSION} numpy ffmpeg
-    conda activate ${ENV_NAME}
 
-    # Remove when https://github.com/pytorch/builder/issues/1985 is fixed
-    if [[ ${MATRIX_GPU_ARCH_TYPE} == 'cuda-aarch64' ]]; then
-        pip3 install numpy --force-reinstall
+    if [[ ${MATRIX_PYTHON_VERSION} == "3.13t" ]]; then
+        conda create -y -n ${ENV_NAME} python=3.13 python-freethreading -c conda-forge
+        conda activate ${ENV_NAME}
+        TORCH_ONLY='true'
+    else
+        conda create -y -n ${ENV_NAME} python=${MATRIX_PYTHON_VERSION}
+        conda activate ${ENV_NAME}
     fi
-
     INSTALLATION=${MATRIX_INSTALLATION/"conda install"/"conda install -y"}
     TEST_SUFFIX=""
 
@@ -40,18 +41,15 @@ else
     if [[ ${USE_EXTRA_INDEX_URL} == 'true' ]]; then
         INSTALLATION=${INSTALLATION/"--index-url"/"--extra-index-url"}
     fi
-
     # use-meta-cdn: use meta cdn for pypi download
     if [[ ${USE_META_CDN} == 'true' ]]; then
         INSTALLATION=${INSTALLATION/"download.pytorch.org"/"d3kup0pazkvub8.cloudfront.net"}
     fi
-
-
+    # torch-only option: remove vision and audio
     if [[ ${TORCH_ONLY} == 'true' ]]; then
         INSTALLATION=${INSTALLATION/"torchvision torchaudio"/""}
         TEST_SUFFIX=" --package torchonly"
     fi
-
     # if RELESE version is passed as parameter - install speific version
     if [[ ! -z ${RELEASE_VERSION} ]]; then
           INSTALLATION=${INSTALLATION/"torch "/"torch==${RELEASE_VERSION} "}
@@ -76,15 +74,17 @@ else
     fi
     eval $INSTALLATION
 
+    # test with numpy 1.x installation needs to happen after torch install
+    MINOR_PYTHON_VERSION=$(echo "$MATRIX_PYTHON_VERSION" | cut -d . -f 2)
+    if [[ ${MINOR_PYTHON_VERSION} < 13 ]]; then
+        pip3 install numpy==1.26.4 --force-reinstall # the latest 1.x release
+    fi
+
     pushd ${PWD}/.ci/pytorch/
 
-    if [[ ${MATRIX_GPU_ARCH_VERSION} == "12.6" || ${MATRIX_GPU_ARCH_TYPE} == "xpu" || ${MATRIX_GPU_ARCH_TYPE} == "rocm" ]]; then
-        export DESIRED_DEVTOOLSET="cxx11-abi"
-
-        # TODO: enable torch-compile on ROCM 
-        if [[ ${MATRIX_GPU_ARCH_TYPE} == "rocm" ]]; then
-            TEST_SUFFIX=${TEST_SUFFIX}" --torch-compile-check disabled"
-        fi
+    # TODO: enable torch-compile on ROCM and on 3.13t
+    if [[ ${MATRIX_GPU_ARCH_TYPE} == "rocm" || ${MATRIX_PYTHON_VERSION} == "3.13t" ]]; then
+        TEST_SUFFIX=${TEST_SUFFIX}" --torch-compile-check disabled"
     fi
 
     if [[ ${TARGET_OS} == 'linux' ]]; then
@@ -102,7 +102,8 @@ else
     ${PYTHON_RUN}  ./smoke_test/smoke_test.py ${TEST_SUFFIX}
     # For pip install also test with latest numpy
     if [[ ${MATRIX_PACKAGE_TYPE} == 'wheel' ]]; then
-        pip3 install numpy --force-reinstall
+        # test with latest numpy 2.x
+        pip3 install numpy --upgrade --force-reinstall
         ${PYTHON_RUN}  ./smoke_test/smoke_test.py ${TEST_SUFFIX}
     fi
 

@@ -1,4 +1,4 @@
-import { Grid, Skeleton } from "@mui/material";
+import { Grid2, Skeleton } from "@mui/material";
 import { COMMIT_TO_WORKFLOW_ID } from "components/benchmark/BranchAndCommitPicker";
 import { TIME_FIELD_NAME } from "components/benchmark/common";
 import { SUITES } from "components/benchmark/compilers/SuitePicker";
@@ -8,7 +8,6 @@ import {
   TimeSeriesPanelWithData,
 } from "components/metrics/panels/TimeSeriesPanel";
 import dayjs from "dayjs";
-import { convertToCompilerPerformanceData } from "lib/benchmark/aoUtils";
 import {
   computeCompilationTime,
   computeExecutionTime,
@@ -16,6 +15,7 @@ import {
   computeMemoryCompressionRatio,
   computePassrate,
   computePeakMemoryUsage,
+  convertToCompilerPerformanceData,
   getPassingModels,
 } from "lib/benchmark/compilerUtils";
 import { fetcher } from "lib/GeneralUtils";
@@ -143,6 +143,16 @@ function SuiteGraphPanel({
     "passrate",
     false
   );
+  const totalModelCountSeries = seriesWithInterpolatedTimes(
+    passrate,
+    startTime,
+    stopTime,
+    granularity,
+    groupByFieldName,
+    TIME_FIELD_NAME,
+    "total_count",
+    false
+  );
 
   // Geomean speedup
   const geomean = computeGeomean(data, models).filter((r: any) => {
@@ -242,8 +252,8 @@ function SuiteGraphPanel({
   );
 
   return (
-    <Grid container spacing={2}>
-      <Grid item xs={12} lg={6} height={GRAPH_ROW_HEIGHT}>
+    <Grid2 container spacing={2}>
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={passrate}
           series={passrateSeries}
@@ -265,10 +275,36 @@ function SuiteGraphPanel({
               },
             },
           }}
+          legendPadding={310}
         />
-      </Grid>
+      </Grid2>
 
-      <Grid item xs={12} lg={6} height={GRAPH_ROW_HEIGHT}>
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+        <TimeSeriesPanelWithData
+          data={passrate}
+          series={totalModelCountSeries}
+          title={`Number of Models / ${SUITES[suite]}`}
+          groupByFieldName={groupByFieldName}
+          yAxisRenderer={(unit) => {
+            return `${unit}`;
+          }}
+          additionalOptions={{
+            yAxis: {
+              scale: true,
+            },
+            label: {
+              show: true,
+              align: "left",
+              formatter: (r: any) => {
+                return r.value[1];
+              },
+            },
+          }}
+          legendPadding={310}
+        />
+      </Grid2>
+
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={geomean}
           series={geomeanSeries}
@@ -290,10 +326,11 @@ function SuiteGraphPanel({
               },
             },
           }}
+          legendPadding={310}
         />
-      </Grid>
+      </Grid2>
 
-      <Grid item xs={12} lg={6} height={GRAPH_ROW_HEIGHT}>
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={compTime}
           series={compTimeSeries}
@@ -315,10 +352,11 @@ function SuiteGraphPanel({
               },
             },
           }}
+          legendPadding={310}
         />
-      </Grid>
+      </Grid2>
 
-      <Grid item xs={12} lg={6} height={GRAPH_ROW_HEIGHT}>
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={memory}
           series={memorySeries}
@@ -339,10 +377,11 @@ function SuiteGraphPanel({
               },
             },
           }}
+          legendPadding={310}
         />
-      </Grid>
+      </Grid2>
 
-      <Grid item xs={12} lg={6} height={GRAPH_ROW_HEIGHT}>
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={peakMemory}
           series={peakMemorySeries}
@@ -364,10 +403,11 @@ function SuiteGraphPanel({
               },
             },
           }}
+          legendPadding={310}
         />
-      </Grid>
+      </Grid2>
 
-      <Grid item xs={12} lg={6} height={GRAPH_ROW_HEIGHT}>
+      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={executionTime}
           series={executionTimeSeries}
@@ -389,8 +429,9 @@ function SuiteGraphPanel({
               },
             },
           }}
+          legendPadding={310}
         />
-      </Grid>
-    </Grid>
+      </Grid2>
+    </Grid2>
   );
 }

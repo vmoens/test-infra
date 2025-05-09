@@ -9,7 +9,7 @@ on:
         type: string
       timeout:
         description: 'Timeout for the job (in minutes)'
-        default: 30
+        default: 120
         type: number
       runner:
         description: 'Runner type to utilize'
@@ -201,7 +201,7 @@ jobs:
         if: ${{ steps.check_container_runner.outputs.IN_CONTAINER_RUNNER == 'true' }}
 
       - name: Download artifacts (if any)
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         if: ${{ inputs.download-artifact != '' }}
         with:
           name: ${{ inputs.download-artifact }}
@@ -306,8 +306,6 @@ jobs:
             if [[ -d "artifacts-to-be-uploaded" ]]; then
               mv -v artifacts-to-be-uploaded/* "${RUNNER_ARTIFACT_DIR}/"
             fi
-            # Set to fail upload step if there are no files for upload and expected files for upload
-            echo 'if-no-files-found=error' >> "${GITHUB_OUTPUT}"
           fi
 
           upload_docs=0
@@ -323,12 +321,11 @@ jobs:
       # NB: Keep this for compatibility with existing jobs and also keep in mind that only
       # our AWS runners have access to S3
       - name: Upload artifacts to GitHub (if any)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ always() && inputs.upload-artifact != '' && !inputs.upload-artifact-to-s3 }}
         with:
           name: ${{ inputs.upload-artifact }}
           path: ${{ runner.temp }}/artifacts/
-          if-no-files-found: ${{ steps.check-artifacts.outputs.if-no-files-found }}
 
       # NB: This only works with our AWS runners
       - name: Upload artifacts to S3 (if any)
@@ -339,7 +336,6 @@ jobs:
           s3-bucket: gha-artifacts
           s3-prefix: |
             ${{ env.REPOSITORY }}/${{ github.run_id }}/artifacts
-          if-no-files-found: ${{ steps.check-artifacts.outputs.if-no-files-found }}
           path: ${{ runner.temp }}/artifacts/
 
       - name: Upload documentation to S3 (if any)

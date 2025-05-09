@@ -1,9 +1,5 @@
-import { Grid, Paper, Skeleton, Stack, Typography } from "@mui/material";
-import {
-  GridCellParams,
-  GridRenderCellParams,
-  GridValueFormatterParams,
-} from "@mui/x-data-grid";
+import { Grid2, Paper, Skeleton, Stack, Typography } from "@mui/material";
+import { GridCellParams, GridRenderCellParams } from "@mui/x-data-grid";
 import GranularityPicker from "components/GranularityPicker";
 import styles from "components/hud.module.css";
 import { TablePanelWithData } from "components/metrics/panels/TablePanel";
@@ -12,6 +8,7 @@ import {
   Granularity,
   seriesWithInterpolatedTimes,
 } from "components/metrics/panels/TimeSeriesPanel";
+import { formatTimeForCharts } from "components/TimeUtils";
 import dayjs from "dayjs";
 import { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
@@ -87,32 +84,32 @@ function GroupReliabilityPanel({
           field: metricName,
           headerName: metricHeaderName,
           flex: 1,
-          valueFormatter: (params: GridValueFormatterParams<any>) => {
-            return Number(params.value).toFixed(2);
+          valueFormatter: (value) => {
+            return Number(value).toFixed(2);
           },
         },
         {
           field: JobAnnotation.BROKEN_TRUNK,
           headerName: "~Broken Trunk %",
           flex: 1,
-          valueFormatter: (params: GridValueFormatterParams<any>) => {
-            return Number(params.value).toFixed(2);
+          valueFormatter: (value) => {
+            return Number(value).toFixed(2);
           },
         },
         {
           field: JobAnnotation.TEST_FLAKE,
           headerName: "~Flaky %",
           flex: 1,
-          valueFormatter: (params: GridValueFormatterParams<any>) => {
-            return Number(params.value).toFixed(2);
+          valueFormatter: (value) => {
+            return Number(value).toFixed(2);
           },
         },
         {
           field: JobAnnotation.INFRA_BROKEN,
           headerName: "~Outage %",
           flex: 1,
-          valueFormatter: (params: GridValueFormatterParams<any>) => {
-            return Number(params.value).toFixed(2);
+          valueFormatter: (value) => {
+            return Number(value).toFixed(2);
           },
         },
         {
@@ -121,7 +118,7 @@ function GroupReliabilityPanel({
           flex: 5,
           // valueFormatter only treat the return value as string, so we need
           // to use renderCell here to get the JSX
-          renderCell: (params: GridRenderCellParams<string>) => {
+          renderCell: (params: GridRenderCellParams<any, string>) => {
             const jobName = params.value;
             if (jobName === undefined) {
               return `Invalid job name ${jobName}`;
@@ -130,7 +127,7 @@ function GroupReliabilityPanel({
             const encodedJobName = encodeURIComponent(jobName);
             return <a href={URL_PREFIX + encodedJobName}>{jobName}</a>;
           },
-          cellClassName: (params: GridCellParams<string>) => {
+          cellClassName: (params: GridCellParams<any, string>) => {
             const jobName = params.value;
             if (jobName === undefined) {
               return "";
@@ -176,7 +173,7 @@ function GraphPanel({
       trigger: "item",
       formatter: (params: any) =>
         `${params.seriesName}` +
-        `<br/>${dayjs(params.value[0]).local().format("M/D h:mm:ss A")}<br/>` +
+        `<br/>${formatTimeForCharts(params.value[0])}<br/>` +
         `${getTooltipMarker(params.color)}` +
         `<b>${params.value[1]}</b>`,
     },
@@ -247,13 +244,13 @@ function Graphs({
   );
 
   return (
-    <Grid container spacing={2}>
-      <Grid item xs={9} height={ROW_HEIGHT}>
+    <Grid2 container spacing={2}>
+      <Grid2 size={{ xs: 9 }} height={ROW_HEIGHT}>
         <Paper sx={{ p: 2, height: "100%" }} elevation={3}>
           <GraphPanel title={"%"} series={displayRedPercentages} />
         </Paper>
-      </Grid>
-      <Grid item xs={3} height={ROW_HEIGHT}>
+      </Grid2>
+      <Grid2 size={{ xs: 3 }} height={ROW_HEIGHT}>
         <div
           style={{ overflow: "auto", height: ROW_HEIGHT, fontSize: "15px" }}
           ref={checkboxRef}
@@ -281,8 +278,8 @@ function Graphs({
             </div>
           ))}
         </div>
-      </Grid>
-    </Grid>
+      </Grid2>
+    </Grid2>
   );
 }
 
@@ -347,7 +344,7 @@ export default function Page() {
         />
       </Stack>
 
-      <Grid item xs={6} height={ROW_HEIGHT + ROW_GAP}>
+      <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT + ROW_GAP}>
         <Graphs
           queryParams={{
             workflowNames: allWorkflows,
@@ -358,10 +355,10 @@ export default function Page() {
           filter={filter}
           toggleFilter={toggleFilter}
         />
-      </Grid>
+      </Grid2>
 
-      <Grid container spacing={2}>
-        <Grid item xs={6} height={ROW_HEIGHT}>
+      <Grid2 container spacing={2}>
+        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
           <GroupReliabilityPanel
             title={`Primary jobs (${PRIMARY_WORKFLOWS.join(", ")})`}
             queryName={queryName}
@@ -373,9 +370,9 @@ export default function Page() {
             metricHeaderName={metricHeaderName}
             filter={filter}
           />
-        </Grid>
+        </Grid2>
 
-        <Grid item xs={6} height={ROW_HEIGHT}>
+        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
           <GroupReliabilityPanel
             title={`Secondary jobs (${SECONDARY_WORKFLOWS.join(", ")})`}
             queryName={queryName}
@@ -387,9 +384,9 @@ export default function Page() {
             metricHeaderName={metricHeaderName}
             filter={filter}
           />
-        </Grid>
+        </Grid2>
 
-        <Grid item xs={6} height={ROW_HEIGHT}>
+        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
           <GroupReliabilityPanel
             title={"Unstable jobs"}
             queryName={queryName}
@@ -401,8 +398,8 @@ export default function Page() {
             metricHeaderName={metricHeaderName}
             filter={filter}
           />
-        </Grid>
-      </Grid>
+        </Grid2>
+      </Grid2>
     </div>
   );
 }

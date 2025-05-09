@@ -3,10 +3,12 @@
  */
 
 import { Paper, Skeleton } from "@mui/material";
+import { formatTimeForCharts, TIME_DISPLAY_FORMAT } from "components/TimeUtils";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
+import { useDarkMode } from "lib/DarkModeContext";
 import { fetcher } from "lib/GeneralUtils";
 import _ from "lodash";
 import useSWR from "swr";
@@ -38,7 +40,8 @@ export function seriesWithInterpolatedTimes(
   smooth: boolean = true,
   sort_by: "total" | "name" = "name",
   graph_type: ChartType = "line",
-  filter: string | undefined = undefined
+  filter: string | undefined = undefined,
+  isRegex: boolean = false
 ) {
   // We want to interpolate the data, filling any "holes" in our time series
   // with 0.
@@ -117,9 +120,21 @@ export function seriesWithInterpolatedTimes(
     return serie;
   });
   if (filter) {
-    series = series.filter((s) =>
-      s.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase())
-    );
+    if (isRegex) {
+      try {
+        const regex = new RegExp(filter, "i");
+        series = series.filter((s) => regex.test(s.name));
+      } catch (e) {
+        // If regex is invalid, fall back to simple include
+        series = series.filter((s) =>
+          s.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase())
+        );
+      }
+    } else {
+      series = series.filter((s) =>
+        s.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase())
+      );
+    }
   }
   if (sort_by === "name") {
     return _.sortBy(series, (x) => x.name);
@@ -155,7 +170,7 @@ export function TimeSeriesPanelWithData({
   // as its own line.
   groupByFieldName,
   // Display format for the time field (ex "M/D h:mm:ss A")
-  timeFieldDisplayFormat = "M/D h:mm:ss A",
+  timeFieldDisplayFormat = TIME_DISPLAY_FORMAT,
   // Callback to render the y axis value in some nice way.
   yAxisRenderer,
   // What label to put on the y axis.
@@ -164,6 +179,7 @@ export function TimeSeriesPanelWithData({
   additionalOptions,
   // To avoid overlapping long legends and the chart
   legendPadding = 200,
+  onEvents,
 }: {
   data: any;
   series: any;
@@ -174,7 +190,10 @@ export function TimeSeriesPanelWithData({
   yAxisLabel?: string;
   additionalOptions?: EChartsOption;
   legendPadding?: number;
+  onEvents?: { [key: string]: any };
 }) {
+  // Use the dark mode context to determine whether to use the dark theme
+  const { darkMode } = useDarkMode();
   // Add extra padding when the legend is active
   const legend_padding = groupByFieldName !== undefined ? legendPadding : 48;
   const title_padding = yAxisLabel ? 65 : 48;
@@ -226,10 +245,10 @@ export function TimeSeriesPanelWithData({
         trigger: "item",
         formatter: (params: any) =>
           `${params.seriesName}` +
-          `<br/>${dayjs
-            .utc(params.value[0])
-            .local()
-            .format(timeFieldDisplayFormat)}<br/>` +
+          `<br/>${formatTimeForCharts(
+            params.value[0],
+            timeFieldDisplayFormat
+          )}<br/>` +
           `${getTooltipMarker(params.color)}` +
           `<b>${yAxisRenderer(params.value[1])}</b>` +
           // add total value to tooltip,
@@ -248,8 +267,10 @@ export function TimeSeriesPanelWithData({
     <Paper sx={{ p: 2, height: "100%" }} elevation={3}>
       <ReactECharts
         style={{ height: "100%", width: "100%" }}
+        theme={darkMode ? "dark-hud" : undefined}
         option={options}
         notMerge={true}
+        onEvents={onEvents}
       />
     </Paper>
   );
@@ -270,7 +291,7 @@ export default function TimeSeriesPanel({
   // What field name to treat as the time value.
   timeFieldName,
   // Display format for the time field (ex "M/D h:mm:ss A")
-  timeFieldDisplayFormat = "M/D h:mm:ss A",
+  timeFieldDisplayFormat = TIME_DISPLAY_FORMAT,
   // What field name to put on the y axis.
   yAxisFieldName,
   // Callback to render the y axis value in some nice way.
@@ -284,6 +305,7 @@ export default function TimeSeriesPanel({
   sort_by = "name",
   max_items_in_series = 0,
   filter = undefined,
+  isRegex = false,
   auto_refresh = true,
   // Additional function to process the data after querying
   dataReader = undefined,
@@ -304,6 +326,7 @@ export default function TimeSeriesPanel({
   sort_by?: "total" | "name";
   max_items_in_series?: number;
   filter?: string;
+  isRegex?: boolean;
   auto_refresh?: boolean;
   dataReader?: (_data: { [k: string]: any }[]) => { [k: string]: any }[];
 }) {
@@ -346,7 +369,8 @@ export default function TimeSeriesPanel({
     smooth,
     sort_by,
     chartType,
-    filter
+    filter,
+    isRegex
   );
 
   // If we have too many series, we'll only show the top N series by total value

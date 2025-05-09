@@ -5,7 +5,6 @@ from functools import lru_cache
 from typing import Any, Dict, List
 
 import requests
-
 from torchci.clickhouse import query_clickhouse
 from torchci.utils import cache_json, run_command
 
@@ -170,7 +169,7 @@ def get_filtered_failed_tests() -> List[Dict[str, Any]]:
         and j.completed_at > CURRENT_TIMESTAMP() - interval 90 day
     """
     failed_tests = query_clickhouse(failed_tests_query, {}, use_cache=True)
-    return filter_tests(failed_tests, get_merge_bases_dict())
+    return filter_tests(failed_tests, get_merge_bases_dict())  # type: ignore[no-any-return]
 
 
 def calculate_generic_test_ratings(tests, merge_bases, get_test_name_fn):

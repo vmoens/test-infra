@@ -14,16 +14,23 @@ requires = [
 # Use legacy backend to import local packages in setup.py
 build-backend = "setuptools.build_meta:__legacy__"
 
+[tool.isort]
+lines_after_imports = 2
+multi_line_output = 3
+indent = 4
+include_trailing_comma = true
+combine_as_imports = true
 
 [tool.black]
 # Uncomment if pyproject.toml worked fine to ensure consistency with flake8
 # line-length = 120
 target-version = ["py38", "py39", "py310", "py311"]
 
-
 [tool.ruff]
 target-version = "py38"
+line-length = 88
 
+[tool.ruff.lint]
 # NOTE: Synchoronize the ignores with .flake8
 ignore = [
     # these ignores are from flake8-bugbear; please fix!
@@ -55,7 +62,6 @@ ignore = [
     "SIM117",
     "SIM118",
 ]
-line-length = 120
 select = [
     "B",
     "C4",
@@ -66,5 +72,5 @@ select = [
     "W",
     # Not included in flake8
     "PLE",
-    "TRY302",
+    "TRY203",
 ]

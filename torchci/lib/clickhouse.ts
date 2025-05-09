@@ -17,6 +17,7 @@ export function getClickhouseClient() {
     password: process.env.CLICKHOUSE_HUD_USER_PASSWORD ?? "",
   });
 }
+//
 
 export function getClickhouseClientWritable() {
   return createClient({
@@ -29,7 +30,8 @@ export function getClickhouseClientWritable() {
 export async function queryClickhouse(
   query: string,
   params: Record<string, unknown>,
-  query_id?: string
+  query_id?: string,
+  useQueryCache?: boolean
 ): Promise<any[]> {
   if (query_id === undefined) {
     query_id = "adhoc";
@@ -40,8 +42,10 @@ export async function queryClickhouse(
    * queryClickhouse
    * @param query: string, the sql query
    * @param params: Record<string, unknown>, the parameters to the query ex { sha: "abcd" }
+   * @param useQueryCache: boolean, if true, cache the query result on Ch side (1 minute TTL)
    */
   const clickhouseClient = getClickhouseClient();
+
   const res = await clickhouseClient.query({
     query,
     format: "JSONEachRow",
@@ -49,6 +53,7 @@ export async function queryClickhouse(
     clickhouse_settings: {
       output_format_json_quote_64bit_integers: 0,
       date_time_output_format: "iso",
+      use_query_cache: useQueryCache ? 1 : 0,
     },
     query_id,
   });
@@ -58,12 +63,14 @@ export async function queryClickhouse(
 
 export async function queryClickhouseSaved(
   queryName: string,
-  inputParams: Record<string, unknown>
+  inputParams: Record<string, unknown>,
+  useQueryCache?: boolean
 ) {
   /**
    * queryClickhouseSaved
    * @param queryName: string, the name of the query, which is the name of the folder in clickhouse_queries
    * @param inputParams: Record<string, unknown>, the parameters to the query, an object where keys are the parameter names
+   * @param useQueryCache: boolean, if true, cache the query result on Ch side (1 minute TTL)
    *
    * This function will filter the inputParams to only include the parameters
    * that are in the query params json file.
@@ -76,7 +83,11 @@ export async function queryClickhouseSaved(
     `${process.cwd()}/clickhouse_queries/${queryName}/query.sql`,
     "utf8"
   );
-  const paramsText = require(`clickhouse_queries/${queryName}/params.json`);
+  let paramsText =
+    require(`clickhouse_queries/${queryName}/params.json`).params;
+  if (paramsText === undefined) {
+    paramsText = {};
+  }
 
   const queryParams = new Map(
     Object.entries(paramsText).map(([key, _]) => [key, inputParams[key]])
@@ -84,6 +95,7 @@ export async function queryClickhouseSaved(
   return await thisModule.queryClickhouse(
     query,
     Object.fromEntries(queryParams),
-    queryName
+    queryName,
+    useQueryCache
   );
 }

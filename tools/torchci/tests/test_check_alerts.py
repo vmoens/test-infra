@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List
 from unittest import main, TestCase
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ from torchci.check_alerts import (
     JobStatus,
     PYTORCH_ALERT_LABEL,
 )
+
 
 JOB_NAME = "periodic / linux-xenial-cuda10.2-py3-gcc7-slow-gradcheck / test (default, 2, 2, linux.4xlarge.nvidia.gpu)"
 DISABLED_JOB_NAMES = [
@@ -155,7 +157,7 @@ class TestGitHubPR(TestCase):
 
     def test_update_comment_empty(self):
         jobs = [JobStatus("job1", [{}]), JobStatus("job2", [{}])]
-        original_issue = {"closed": False}
+        original_issue: Dict[str, Any] = {"closed": False}  # type: ignore[annotation-unchecked]
         original_issue["body"] = (
             "- [job1](a) failed consecutively starting with commit []()\n"
             "- [job2](a) failed consecutively starting with commit []()"
@@ -164,9 +166,9 @@ class TestGitHubPR(TestCase):
         self.assertFalse(update_comment)
 
         jobs = [JobStatus("job1", [{}]), JobStatus("job2", [{}])]
-        original_issue[
-            "body"
-        ] = "- [job1](a) failed consecutively starting with commit []()"
+        original_issue["body"] = (
+            "- [job1](a) failed consecutively starting with commit []()"
+        )
         update_comment = gen_update_comment(original_issue, jobs)
         self.assertTrue("started failing" in update_comment)
         self.assertTrue("job2" in update_comment)
@@ -311,7 +313,7 @@ class TestGitHubPR(TestCase):
 
     @patch("requests.post", side_effect=mock_fetch_alerts)
     def test_fetch_alert(self, mocked_alerts):
-        cases = [
+        cases: List[Dict[str, Any]] = [  # type: ignore[annotation-unchecked]
             {
                 "repo": "pytorch/builder",
                 "branch": "main",

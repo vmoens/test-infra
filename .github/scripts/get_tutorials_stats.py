@@ -8,7 +8,8 @@ from functools import lru_cache
 from subprocess import check_output
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-import boto3  # type: ignore[import]
+import boto3  # type: ignore[import-not-found]
+
 
 METADATA_PATH = "ossci_tutorials_stats/metadata.csv"
 FILENAMES_PATH = "ossci_tutorials_stats/filenames.csv"
@@ -112,9 +113,13 @@ class CommitInfo(NamedTuple):
 
 def get_file_names(
     cwd: Optional[str] = None,
+    path_filter: Optional[str] = None,
 ) -> List[CommitInfo]:
+    cmd = "git log --date=short --pretty='format:%h;%ad' --numstat"
+    if path_filter:
+        cmd += f" -- {path_filter}"
     lines = run_command(
-        "git log --date=short --pretty='format:%h;%ad' --numstat",
+        cmd,
         cwd=cwd,
         env={"TZ": "UTC"},
     ).split("\n")
@@ -170,14 +175,14 @@ def upload_to_s3(
         f"{bucket_name}",
         f"{key}",
     ).put(
-        Body=gzip.compress(body.getvalue().encode()),
+        Body=gzip.compress(body.getvalue().encode()),  # type: ignore[attr-defined]
         ContentEncoding="gzip",
         ContentType="application/csv",
     )
     print("Done!")
 
 
-def conv_to_csv(json_data: List[Dict[str, Any]]) -> str:
+def conv_to_csv(json_data: List[Dict[str, Any]]) -> io.StringIO:
     # Will not handle nested
     body = io.StringIO()
     f = csv.writer(body)
@@ -190,13 +195,22 @@ def conv_to_csv(json_data: List[Dict[str, Any]]) -> str:
 
 
 def main() -> None:
+    # Process the tutorials repo
+    print("Processing tutorials repo")
     tutorials_dir = os.path.expanduser("./tutorials")
-    get_history_log = get_history(tutorials_dir)
-    commits_to_files = get_file_names(tutorials_dir)
+    tutorials_history_log = get_history(tutorials_dir)
+    tutorials_commits_to_files = get_file_names(tutorials_dir)
 
-    # Upload data to S3 as csv with gzip compression and no header line
+    # Process the pytorch/docs dir
+    print("Processing pytorch/docs dir")
+    pytorch_docs_dir = os.path.expanduser("./pytorch/docs")
+    pytorch_docs_history_log = get_history(pytorch_docs_dir)
+    pytorch_docs_commits_to_files = get_file_names(
+        os.path.expanduser("./pytorch"), "docs"
+    )
 
-    print(f"Uploading data to {METADATA_PATH}")
+    # Combine the two histories
+
     history_log = [
         {
             "commit_id": i[0],
@@ -206,9 +220,45 @@ def main() -> None:
             "number_of_changed_files": int(i[4]),
             "lines_added": int(i[5]),
             "lines_deleted": int(i[6]),
+            "repo": "tutorials",
         }
-        for i in get_history_log
+        for i in tutorials_history_log
     ]
+
+    history_log.extend(
+        [
+            {
+                "commit_id": i[0],
+                "author": i[1],
+                "date": i[2],
+                "title": i[3],
+                "number_of_changed_files": int(i[4]),
+                "lines_added": int(i[5]),
+                "lines_deleted": int(i[6]),
+                "repo": "pytorch",
+            }
+            for i in pytorch_docs_history_log
+        ]
+    )
+
+    # Combine the two commits to files
+
+    filenames = []
+    for entry in tutorials_commits_to_files:
+        items = convert_to_dict(entry)
+        for item in items:
+            item["filename"] = f"tutorials/{item['filename']}"
+        filenames.extend(items)
+
+    for entry in pytorch_docs_commits_to_files:
+        items = convert_to_dict(entry)
+        for item in items:
+            item["filename"] = f"pytorch/{item['filename']}"
+        filenames.extend(items)
+
+    # Upload data to S3 as csv with gzip compression and no header line
+
+    print(f"Uploading data to {METADATA_PATH}")
     upload_to_s3(
         "ossci-raw-job-status",
         f"{METADATA_PATH}",
@@ -216,11 +266,8 @@ def main() -> None:
     )
     print(f"Finished uploading data to {METADATA_PATH}")
 
+    # Upload filenames to S3
     print(f"Uploading data to {FILENAMES_PATH}")
-    filenames = []
-    for entry in commits_to_files:
-        items = convert_to_dict(entry)
-        filenames.extend(items)
     upload_to_s3(
         "ossci-raw-job-status",
         f"{FILENAMES_PATH}",

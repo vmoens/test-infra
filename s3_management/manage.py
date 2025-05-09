@@ -153,6 +153,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "nvidia_cuda_runtime_cu12",
     "nvidia_cudnn_cu12",
     "nvidia_cufft_cu12",
+    "nvidia_cufile_cu12",
     "nvidia_curand_cu12",
     "nvidia_cusolver_cu12",
     "nvidia_cusparse_cu12",
@@ -183,6 +184,7 @@ PACKAGE_ALLOW_LIST = {x.lower() for x in [
     "torchtext",
     "torchtune",
     "torchvision",
+    "torchvision_extra_decoders",
     "triton",
     "tqdm",
     "typing_extensions",
@@ -381,16 +383,22 @@ class S3Index:
         out.append('  <body>')
         out.append('    <h1>Links for {}</h1>'.format(package_name.lower().replace("_", "-")))
         for obj in sorted(self.gen_file_list(subdir, package_name)):
-            maybe_fragment = f"#sha256={obj.checksum}" if obj.checksum else ""
-            pep658_attribute = ""
+            # Do not include checksum for nightly packages, see
+            # https://github.com/pytorch/test-infra/pull/6307
+            maybe_fragment = f"#sha256={obj.checksum}" if obj.checksum and not obj.orig_key.startswith("whl/nightly") else ""
+            attributes = ""
             if obj.pep658:
                 pep658_sha = f"sha256={obj.pep658}"
                 # pep714 renames the attribute to data-core-metadata
-                pep658_attribute = (
+                attributes = (
                     f' data-dist-info-metadata="{pep658_sha}" data-core-metadata="{pep658_sha}"'
                 )
+            # Ugly hack: mark networkx-3.3, 3.4.2 as Python-3.10+ only to unblock https://github.com/pytorch/pytorch/issues/152191
+            if any(obj.key.endswith(x) for x in ("networkx-3.3-py3-none-any.whl", "networkx-3.4.2-py3-none-any.whl")):
+                attributes += ' data-requires-python="&gt;=3.10"'
+
             out.append(
-                f'    <a href="/{obj.key}{maybe_fragment}"{pep658_attribute}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
+                f'    <a href="/{obj.key}{maybe_fragment}"{attributes}>{path.basename(obj.key).replace("%2B","+")}</a><br/>'
             )
         # Adding html footer
         out.append('  </body>')
@@ -520,6 +528,7 @@ class S3Index:
 
     def fetch_metadata(self: S3IndexType) -> None:
         # Add PEP 503-compatible hashes to URLs to allow clients to avoid spurious downloads, if possible.
+        regex_multipart_upload = r"^[A-Za-z0-9+/=]+=-[0-9]+$"
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
             for idx, future in {
                 idx: executor.submit(
@@ -532,10 +541,17 @@ class S3Index:
                 if obj.size is None
             }.items():
                 response = future.result()
-                sha256 = (_b64 := response.get("ChecksumSHA256")) and base64.b64decode(_b64).hex()
+                raw = response.get("ChecksumSHA256")
+                if raw and match(regex_multipart_upload, raw):
+                    # Possibly part of a multipart upload, making the checksum incorrect
+                    print(f"WARNING: {self.objects[idx].orig_key} has bad checksum: {raw}")
+                    raw = None
+                sha256 = raw and base64.b64decode(raw).hex()
                 # For older files, rely on checksum-sha256 metadata that can be added to the file later
                 if sha256 is None:
                     sha256 = response.get("Metadata", {}).get("checksum-sha256")
+                if sha256 is None:
+                    sha256 = response.get("Metadata", {}).get("x-amz-meta-checksum-sha256")
                 self.objects[idx].checksum = sha256
                 if size := response.get("ContentLength"):
                     self.objects[idx].size = int(size)

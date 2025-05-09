@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AiFillGithub } from "react-icons/ai";
 import LoginSection from "./LoginSection";
+import ThemeModePicker from "./ThemeModePicker";
 
 const NavBarDropdown = ({
   title,
@@ -45,8 +46,8 @@ function NavBar() {
       href: "/benchmark/torchao",
     },
     {
-      name: "TorchBench",
-      href: "/torchbench/userbenchmark",
+      name: "Triton",
+      href: "/tritonbench/commit_view",
     },
     {
       name: "PyTorch LLMs",
@@ -60,6 +61,14 @@ function NavBar() {
       name: "TorchAO LLMs",
       href: "/benchmark/llms?repoName=pytorch%2Fao",
     },
+    {
+      name: "PT CacheBench",
+      href: "/benchmark/llms?repoName=pytorch%2Fpytorch&benchmarkName=TorchCache+Benchmark",
+    },
+    {
+      name: "vLLM v1",
+      href: "/benchmark/llms?repoName=vllm-project%2Fvllm",
+    },
   ];
 
   const devInfraDropdown = [
@@ -72,12 +81,20 @@ function NavBar() {
       href: "/tts",
     },
     {
+      name: "Queue Time Analysis",
+      href: "/queue_time_analysis",
+    },
+    {
       name: "Nightly Branch",
       href: "/hud/pytorch/pytorch/nightly",
     },
     {
       name: "Nightly Dashboard",
       href: "/nightlies",
+    },
+    {
+      name: "Cancelled Jobs",
+      href: "/job_cancellation_dashboard",
     },
     {
       name: "Failures Metric",
@@ -95,6 +112,14 @@ function NavBar() {
     {
       name: "Cost Analysis",
       href: "/cost_analysis",
+    },
+    {
+      name: "Query Execution Metrics",
+      href: "/query_execution_metrics",
+    },
+    {
+      name: "Build Time Metrics",
+      href: "/build_time_metrics",
     },
   ];
 
@@ -133,6 +158,8 @@ function NavBar() {
         style={{
           marginLeft: "auto",
           marginRight: "0px",
+          display: "flex",
+          alignItems: "center",
         }}
       >
         <ul className={styles.navbarlinkslist}>
@@ -158,14 +185,23 @@ function NavBar() {
           </li>
           <NavBarDropdown title="Benchmarks" items={benchmarksDropdown} />
           <NavBarDropdown title="Dev Infra" items={devInfraDropdown} />
-          <li style={{ cursor: "pointer" }}>
+          <li
+            style={{ cursor: "pointer", display: "flex", alignItems: "center" }}
+          >
             <Link
               href="https://github.com/pytorch/test-infra/tree/main/torchci"
               passHref
-              style={{ color: "black" }}
+              style={{
+                color: "var(--icon-color)",
+                display: "flex",
+                alignItems: "center",
+              }}
             >
               <AiFillGithub />
             </Link>
+          </li>
+          <li>
+            <ThemeModePicker />
           </li>
           <li style={{ padding: "0 1rem" }}>
             <LoginSection></LoginSection>

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List, NamedTuple
 
 import requests
-
 from setuptools import distutils  # type: ignore[import]
 from torchci.check_alerts import clear_alerts, create_issue, fetch_alerts, update_issue
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -45,7 +45,7 @@ def gen_update_comment(original_issue: Any, new_queues: List[QueueInfo]) -> str:
         for q in started_queueing:
             s += gen_queue_info_str(q)
         s += "\n"
-    return s
+    return s.rstrip()
 
 
 def gen_issue(queues: List[QueueInfo]) -> Any:

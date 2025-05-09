@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-import boto3  # type: ignore
+import boto3  # type: ignore[import]
 from torchci.clickhouse import query_clickhouse
 from torchci.td.utils import list_past_year_shas, run_command
 
@@ -36,18 +36,6 @@ from
     shas s
     left anti join default.merge_bases mb on mb.sha = shas.sha
 """
-
-
-def run_command(command: str) -> str:
-    cwd = REPO_ROOT / ".." / "pytorch"
-    return (
-        subprocess.check_output(
-            command.split(" "),
-            cwd=cwd,
-        )
-        .decode("utf-8")
-        .strip()
-    )
 
 
 def pull_shas(shas: List[str]) -> None:
@@ -96,7 +84,7 @@ def upload_merge_base_info(shas: List[str]) -> None:
                 ContentType="application/json",
             )
         except Exception as e:
-            return e
+            return
 
 
 if __name__ == "__main__":

@@ -136,10 +136,18 @@ export async function updateDrciComments(
   );
   const head = get_head_branch(repo);
   await addMergeBaseCommits(octokit, repo, head, workflowsByPR);
-  const sevs = getActiveSEVs(await fetchIssuesByLabel("ci: sev"));
+  const sevs = getActiveSEVs(
+    await fetchIssuesByLabel("ci: sev", /*cache*/ true)
+  );
   const flakyRules: FlakyRule[] = (await fetchJSON(FLAKY_RULES_JSON)) || [];
-  const unstableIssues: IssueData[] = await fetchIssuesByLabel("unstable");
-  const disabledTestIssues: IssueData[] = await fetchIssuesByLabel("skipped");
+  const unstableIssues: IssueData[] = await fetchIssuesByLabel(
+    "unstable",
+    /*cache*/ true
+  );
+  const disabledTestIssues: IssueData[] = await fetchIssuesByLabel(
+    "skipped",
+    /*cache*/ true
+  );
   const baseCommitJobs = await getBaseCommitJobs(workflowsByPR);
   const existingDrCiComments = await getExistingDrCiComments(
     `${OWNER}/${repo}`,
@@ -436,10 +444,9 @@ export async function getBaseCommitJobs(
   workflowsByPR: Map<number, PRandJobs>
 ): Promise<Map<string, Map<string, RecentWorkflowsData[]>>> {
   // get merge base shas
-  let baseShas = [];
-  for (const [_, pr_info] of workflowsByPR) {
-    baseShas.push(pr_info.merge_base);
-  }
+  const baseShas = _.uniq(
+    Array.from(workflowsByPR.values()).map((v) => v.merge_base)
+  );
 
   // fetch failing jobs on those shas
   const commitFailedJobsQueryResult = await fetchFailedJobsFromCommits(
@@ -544,7 +551,8 @@ function constructResultsJobsSections(
   const hudPrUrl = `${hudBaseUrl}/pr/${owner}/${repo}/${prNumber}`;
   const jobsSorted = jobs.sort((a, b) => a.name.localeCompare(b.name));
   for (const job of jobsSorted) {
-    output += `* [${job.name}](${hudPrUrl}#${job.id}) ([gh](${job.html_url}))`;
+    const isPendingIcon = isPending(job) ? ":hourglass_flowing_sand: " : "";
+    output += `* ${isPendingIcon}[${job.name}](${hudPrUrl}#${job.id}) ([gh](${job.html_url}))`;
 
     const relatedJob = relatedJobs.get(job.id);
     // Show the related trunk failure for broken trunk or the similar failure for flaky
@@ -622,8 +630,12 @@ export function constructResultsComment(
   prNumber: number
 ): string {
   let output = `\n`;
-  const unrelatedFailureCount =
-    flakyJobs.length + brokenTrunkJobs.length + unstableJobs.length;
+  // Filter out unstable pending jobs
+  const unrelatedFailureCount = _(flakyJobs)
+    .concat(brokenTrunkJobs)
+    .concat(unstableJobs)
+    .filter((job) => !isPending(job))
+    .value().length;
   const newFailedJobs: RecentWorkflowsData[] = failedJobs.filter(
     (job) =>
       job.conclusion !== "cancelled" &&
@@ -634,11 +646,7 @@ export function constructResultsComment(
       job.conclusion === "cancelled" ||
       job.failure_captures.includes(CANCELLED_STEP_ERROR)
   );
-  const failing =
-    failedJobs.length +
-    flakyJobs.length +
-    brokenTrunkJobs.length +
-    unstableJobs.length;
+  const failing = failedJobs.length + unrelatedFailureCount;
   const headerPrefix = `## `;
   const pendingIcon = `:hourglass_flowing_sand:`;
   const successIcon = `:white_check_mark:`;
@@ -662,8 +670,7 @@ export function constructResultsComment(
   const hasSignificantFailures = newFailedJobs.length > 0;
   const hasCancelledFailures = cancelledJobs.length > 0;
   const hasPending = pending > 0;
-  const hasUnrelatedFailures =
-    flakyJobs.length + brokenTrunkJobs.length + unstableJobs.length;
+  const hasUnrelatedFailures = unrelatedFailureCount > 0;
 
   let icon = "";
   if (hasSignificantFailures || hasCancelledFailures) {
@@ -795,14 +802,11 @@ export function constructResultsComment(
     repo,
     prNumber,
     "UNSTABLE",
-    `The following ${pluralize(
-      "job",
-      unstableJobs.length
-    )} failed but ${pluralize(
-      "was",
+    `The following ${pluralize("job", unstableJobs.length)} ${pluralize(
+      "is",
       unstableJobs.length,
-      "were"
-    )} likely due to flakiness present on trunk and has been marked as unstable`,
+      "are"
+    )} marked as unstable, possibly due to flakiness on trunk`,
     unstableJobs,
     "",
     true,
@@ -855,6 +859,10 @@ function getTrunkFailure(
     .find((baseJob) => isSameFailure(baseJob, job));
 }
 
+function isPending(job: RecentWorkflowsData): boolean {
+  return job.conclusion === "" && isTime0(job.completed_at);
+}
+
 export async function getWorkflowJobsStatuses(
   prInfo: PRandJobs,
   flakyRules: FlakyRule[],
@@ -889,8 +897,15 @@ export async function getWorkflowJobsStatuses(
   const relatedInfo: Map<number, string> = new Map();
 
   for (const job of prInfo.jobs) {
-    if (job.conclusion === "" && isTime0(job.completed_at)) {
+    if (isPending(job)) {
       pending++;
+      if (isUnstableJob(job as any, unstableIssues)) {
+        unstableJobs.push(job);
+        relatedIssues.set(
+          job.id,
+          getOpenUnstableIssues(job.name, unstableIssues)
+        );
+      }
     } else if (job.conclusion === "failure" || job.conclusion === "cancelled") {
       const suppressedLabels = await getSuppressedLabels(job, labels);
       if (prInfo.repo === "pytorch" && suppressedLabels.length !== 0) {
@@ -1102,69 +1117,63 @@ export async function reorganizeWorkflows(
       workflow.name,
     ])
   );
-  const workflowsByPR: Map<number, PRandJobs> = new Map();
-  const headShaTimestamps: Map<string, string> = new Map();
+  const workflowsByPR: PRandJobs[] = await Promise.all(
+    _(dedupedRecentWorkflows)
+      .groupBy("pr_number")
+      .map(async (workflows, prNumber) => {
+        // NB: The head SHA timestamp is currently used as the end date when
+        // searching for similar failures.  However, it's not available on CH for
+        // commits from forked PRs before a ciflow ref is pushed.  In such case,
+        // the head SHA timestamp will be undefined and we will make an additional
+        // query to GitHub to get the value
+        let headShaTimestamp = workflows.find(
+          (workflow) => !isTime0(workflow.head_sha_timestamp)
+        )?.head_sha_timestamp;
+        if (octokit && headShaTimestamp === undefined) {
+          headShaTimestamp = await fetchCommitTimestamp(
+            octokit,
+            owner,
+            repo,
+            workflows[0].head_sha
+          );
+        }
+        workflows.forEach((workflow) => {
+          if (isTime0(workflow.head_sha_timestamp) && headShaTimestamp) {
+            workflow.head_sha_timestamp = headShaTimestamp;
+          }
+        });
 
-  for (const workflow of dedupedRecentWorkflows) {
-    const prNumber = workflow.pr_number;
-    if (!workflowsByPR.has(prNumber)) {
-      let headShaTimestamp = workflow.head_sha_timestamp;
-      // NB: The head SHA timestamp is currently used as the end date when
-      // searching for similar failures.  However, it's not available on CH for
-      // commits from forked PRs before a ciflow ref is pushed.  In such case,
-      // the head SHA timestamp will be undefined and we will make an additional
-      // query to GitHub to get the value
-      if (octokit && isTime0(headShaTimestamp)) {
-        headShaTimestamp = await fetchCommitTimestamp(
-          octokit,
-          owner,
-          repo,
-          workflow.head_sha
-        );
-        headShaTimestamps.set(workflow.head_sha, headShaTimestamp);
-      }
+        let prTitle = "";
+        let prBody = "";
+        let prShas: { sha: string; title: string }[] = [];
+        // Gate this to PyTorch as disabled tests feature is only available there
+        if (octokit && repo === "pytorch") {
+          const prData = await fetchPR(owner, repo, `${prNumber}`, octokit);
+          prTitle = prData.title;
+          prBody = prData.body;
+          prShas = prData.shas;
+        }
 
-      let prTitle = "";
-      let prBody = "";
-      let prShas: { sha: string; title: string }[] = [];
-      // Gate this to PyTorch as disabled tests feature is only available there
-      if (octokit && repo === "pytorch") {
-        const prData = await fetchPR(owner, repo, `${prNumber}`, octokit);
-        prTitle = prData.title;
-        prBody = prData.body;
-        prShas = prData.shas;
-      }
-
-      workflowsByPR.set(prNumber, {
-        pr_number: prNumber,
-        head_sha: workflow.head_sha,
-        head_sha_timestamp: headShaTimestamp,
-        jobs: [],
-        merge_base: "",
-        merge_base_date: "",
-        owner: owner,
-        repo: repo,
-        title: prTitle,
-        body: prBody,
-        shas: prShas,
-      });
-    }
-
-    const headShaTimestamp = headShaTimestamps.get(workflow.head_sha);
-    if (
-      isTime0(workflow.head_sha_timestamp) &&
-      headShaTimestamp &&
-      !isTime0(headShaTimestamp)
-    ) {
-      workflow.head_sha_timestamp = headShaTimestamp;
-    }
-
-    workflowsByPR.get(prNumber)!.jobs.push(workflow);
-  }
+        return {
+          pr_number: parseInt(prNumber),
+          head_sha: workflows[0].head_sha,
+          head_sha_timestamp: headShaTimestamp ?? "",
+          jobs: workflows,
+          merge_base: "",
+          merge_base_date: "",
+          owner: owner,
+          repo: repo,
+          title: prTitle,
+          body: prBody,
+          shas: prShas,
+        };
+      })
+      .value()
+  );
 
   // clean up the workflows - remove retries, remove workflows that have jobs,
   // remove cancelled jobs with weird names
-  for (const [, prInfo] of workflowsByPR) {
+  for (const prInfo of workflowsByPR) {
     const [workflows, jobs] = _.partition(
       prInfo.jobs,
       (job) => job.workflowId === 0
@@ -1212,5 +1221,8 @@ export async function reorganizeWorkflows(
     // Remove cancelled jobs with weird names
     prInfo.jobs = removeCancelledJobAfterRetry<RecentWorkflowsData>(allJobs);
   }
-  return workflowsByPR;
+  return workflowsByPR.reduce((acc, prInfo) => {
+    acc.set(prInfo.pr_number, prInfo);
+    return acc;
+  }, new Map<number, PRandJobs>());
 }

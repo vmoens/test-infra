@@ -2,6 +2,18 @@
 
 This is a terraform module that sets up self hosted github runners on AWS along with the infra needed to autoscale them
 
+# Testing your changes
+In order to verify if your changes will pass CI testing, you can simply run from this directory:
+
+```
+$ make tflint
+```
+
+This depends on Tofu, CMake and TFLint being installed.
+
+# Checking plan changes of your changes
+This module is not stand alone. It is a reusable module designed to be imported, configured, and used in your project.
+
 # Release
 Terraform code that uses this module specify the tag (version of test-infra) that they use via a file called `Terrafile`.  We need to create a new tag for any changes here that we want to deploy and update the `Terrafile` to refer to that tag:
 
@@ -31,3 +43,9 @@ Terraform code that uses this module specify the tag (version of test-infra) tha
 # Runner Architecture diagram
 This diagram shows how the runners function once deployed to AWS
 ![High level runner architecture diagram](architecture-diagram.png)
+
+
+# References
+
+* [Lambda Autoscaler Deep Dive Day 1](https://zoom.us/rec/share/Xob0_IiyV9u4t47Ljc-g0jNXXmmIpDdf7b9srIsPClsQOHw32FETX9TIB_2u25Or.AmVCbPNuelq7-1Lz)
+* [Lambda Autoscaler Deep Dive Day 2](https://zoom.us/rec/share/LuNSyI6E3FzT4Dl9jI15QFDyxK7RSmpFU0AFAo9Bh4BWgli5PVoDYG_qYmsJjiN7.m96Y4zEunU8IWgUk)

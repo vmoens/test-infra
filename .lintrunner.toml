@@ -5,6 +5,10 @@ code = 'FLAKE8'
 include_patterns = ['**/*.py']
 exclude_patterns = [
     '.git/**',
+    '.github/scripts/**',
+    'aws/lambda/**',
+    's3_management/**',
+    'tools/**',
 ]
 command = [
     'python3',
@@ -16,16 +20,17 @@ init_command = [
     'python3',
     'tools/linter/adapters/pip_init.py',
     '--dry-run={{DRYRUN}}',
-    'flake8==6.0.0',
+    'flake8==6.1.0',
     'flake8-bugbear==23.3.23',
-    'flake8-comprehensions==3.12.0',
+    'flake8-comprehensions==3.15.0',
     'flake8-executable==2.1.3',
     'flake8-logging-format==0.9.0',
     'flake8-pyi==23.3.1',
     'flake8-simplify==0.19.3',
     'mccabe==0.7.0',
-    'pycodestyle==2.10.0',
-    'pyflakes==3.0.1',
+    'pycodestyle==2.11.1',
+    'pyflakes==3.1.0',
+    'torchfix==0.4.0 ; python_version >= "3.9" and python_version < "3.13"',
 ]
 
 [[linter]]
@@ -38,6 +43,8 @@ include_patterns = [
     'torchci/**/*.py',
     'torchci/**/*.pyi',
     '.github/scripts/*.py',
+    'aws/lambda/oss-ci-job-queue-time/*.py',
+    'aws/lambda/whl_metadata_upload_pep658/**/*.py',
 ]
 command = [
     'python3',
@@ -50,24 +57,32 @@ init_command = [
     'python3',
     'tools/linter/adapters/pip_init.py',
     '--dry-run={{DRYRUN}}',
-    'numpy==1.24.3',
-    'expecttest==0.1.3',
-    'mypy==0.982',
+    'numpy==1.26.4 ; python_version >= "3.9" and python_version <= "3.11"',
+    'numpy==2.1.0 ; python_version >= "3.12"',
+    'expecttest==0.3.0',
+    'mypy==1.13.0',
+    'sympy==1.13.0 ; python_version >= "3.9"',
     'types-requests==2.27.25',
     'types-PyYAML==6.0.7',
     'types-tabulate==0.8.8',
     'types-protobuf==3.19.18',
     'types-pkg-resources==0.1.3',
     'types-Jinja2==2.11.9',
+    'types-colorama==0.4.6',
+    'filelock==3.13.1',
     'junitparser==2.1.1',
     'rich==10.9.0',
-    'pyyaml==6.0',
+    'pyyaml==6.0.1',
+    'optree==0.13.0',
 ]
 
 [[linter]]
 code = 'TYPEIGNORE'
 include_patterns = ['**/*.py', '**/*.pyi']
 exclude_patterns = [
+    # Putting these exclusions just to get the linter running.
+    "tools/stronghold/src/api/types.py",
+    "tools/stronghold/tests/api/test_ast_param_types.py",
 ]
 command = [
     'python3',
@@ -111,6 +126,9 @@ exclude_patterns=[
     '**/*.ptl',
     '**/fixtures/**',
     '**/snapshots/**',
+    '.github/actions/setup-ssh/index.js',
+    'aws/lambda/log-classifier/data/**',
+    'tools/clang-tidy-checks/*-patches/**',
 ]
 command = [
     'python3',
@@ -129,6 +147,7 @@ exclude_patterns = [
     '**/*.patch',
     '**/fixtures/**',
     '**/snapshots/**',
+    '.github/actions/setup-ssh/index.js',
 ]
 command = [
     'python3',
@@ -155,6 +174,9 @@ exclude_patterns = [
     '.lintrunner.toml',
     '**/fixtures/**',
     '**/snapshots/**',
+    '.github/actions/setup-ssh/index.js',
+    'terraform-aws-github-runner/**',
+    'aws/ami/windows/**',
 ]
 command = [
     'python3',
@@ -179,6 +201,15 @@ exclude_patterns = [
     '**/*.py',
     '**/*.md',
     '**/*.diff',
+    # Putting these exclusions just to get the linter running.
+    ".github/scripts/validate_binaries.sh",
+    ".github/scripts/validate_pipy.sh",
+    ".github/scripts/validate_test_ops.sh",
+    ".github/workflows/build_wheels_macos.yml",
+    ".github/workflows/github-status-test-lambda.yml",
+    ".github/workflows/log-classifier-lambda.yml",
+    ".github/workflows/validate-linux-binaries.yml",
+    ".github/workflows/validate-repackaged-binary-sizes.yml",
 ]
 command = [
     'python3',
@@ -212,6 +243,8 @@ exclude_patterns = [
     '**/gradlew',
     '**/fixtures/**',
     '**/snapshots/**',
+    # Putting this exclusion just to get the linter running.
+    "tools/stronghold/bin/build-check-api-compatibility",
 ]
 command = [
     'python3',
@@ -246,16 +279,19 @@ init_command = [
     '--output-name=actionlint',
 ]
 
-# Black + usort
+# usort + ruff-format
 [[linter]]
-code = 'UFMT'
+code = 'PYFMT'
 include_patterns = [
-    'tools/torchci/**/*.py',
-    '.github/scripts/*.py',
+    '**/*.py',
+]
+exclude_patterns = [
+    'aws/lambda/**',
+    's3_management/**',
 ]
 command = [
     'python3',
-    'tools/linter/adapters/ufmt_linter.py',
+    'tools/linter/adapters/pyfmt_linter.py',
     '--',
     '@{{PATHSFILE}}'
 ]
@@ -264,9 +300,10 @@ init_command = [
     'tools/linter/adapters/pip_init.py',
     '--dry-run={{DRYRUN}}',
     '--no-black-binary',
-    'black==23.3.0',
-    'ufmt==2.1.0',
-    'usort==1.0.6',
+    'black==23.12.1',
+    'usort==1.0.8.post1',
+    'isort==5.13.2',
+    'ruff==0.8.4',  # sync with RUFF
 ]
 is_formatter = true
 
@@ -300,6 +337,10 @@ command = [
 code = 'RUFF'
 include_patterns = ['**/*.py']
 exclude_patterns = [
+    '.github/scripts/**',
+    'aws/lambda/**',
+    's3_management/**',
+    'tools/**',
 ]
 command = [
     'python3',
@@ -313,9 +354,36 @@ init_command = [
     'python3',
     'tools/linter/adapters/pip_init.py',
     '--dry-run={{DRYRUN}}',
-    'ruff==0.0.269',
+    'ruff==0.8.4',  # sync with PYFMT
 ]
 is_formatter = true
+
+[[linter]]
+code = 'SQLFLUFF'
+include_patterns = ['torchci/clickhouse_queries/**/*.sql']
+command = [
+    'python3',
+    'tools/linter/adapters/sqlfluff_linter.py',
+    '@{{PATHSFILE}}',
+]
+init_command = [
+    'python3',
+    'tools/linter/adapters/pip_init.py',
+    '--dry-run={{DRYRUN}}',
+    'sqlfluff==3.3.0',
+]
+is_formatter = true
+
+[[linter]]
+code = 'SQL_PARAMS'
+include_patterns = ['torchci/clickhouse_queries/**/params.json']
+exclude_patterns = []
+command = [
+    'python3',
+    'tools/linter/adapters/sql_params_linter.py',
+    '@{{PATHSFILE}}',
+]
+is_formatter = false
 
 [[linter]]
 code = 'RUSTFMT'

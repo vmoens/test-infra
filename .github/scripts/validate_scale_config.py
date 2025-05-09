@@ -9,26 +9,26 @@ import argparse
 import copy
 import json
 import os
-
 import urllib.request
 from pathlib import Path
+from typing import Any, cast, Dict, List, NamedTuple, Union
 
-from typing import Any, cast, Dict, List, NamedTuple
-
-import jsonschema
-
+import jsonschema  # type: ignore[import-untyped]
 import yaml
+
 
 MAX_AVAILABLE_MINIMUM = 50
 
 # Paths relative to their respective repositories
 META_SCALE_CONFIG_PATH = ".github/scale-config.yml"
+META_CANARY_SCALE_CONFIG_PATH = ".github/canary-scale-config.yml"
 LF_SCALE_CONFIG_PATH = ".github/lf-scale-config.yml"
 LF_CANARY_SCALE_CONFIG_PATH = ".github/lf-canary-scale-config.yml"
 
 RUNNER_TYPE_CONFIG_KEY = "runner_types"
 
 PREFIX_META = ""
+PREFIX_META_CANARY = "c."
 PREFIX_LF = "lf."
 PREFIX_LF_CANARY = "lf.c."
 
@@ -49,7 +49,7 @@ _RUNNER_BASE_JSCHEMA = {
 }
 
 RUNNER_JSCHEMA = copy.deepcopy(_RUNNER_BASE_JSCHEMA)
-RUNNER_JSCHEMA["properties"]["variants"] = {
+RUNNER_JSCHEMA["properties"]["variants"] = {  # type: ignore[index]
     "type": "object",
     "patternProperties": {
         "^[a-zA-Z0-9]+$": _RUNNER_BASE_JSCHEMA,
@@ -139,12 +139,15 @@ def runner_types_are_equivalent(
     return are_same
 
 
-def is_config_valid_internally(runner_types: Dict[str, Dict[str, str]]) -> bool:
+def is_config_valid_internally(
+    runner_types: Dict[str, Dict[str, Union[int, str, dict]]],
+) -> bool:
     """
     Ensure that for every linux runner type in the config:
 
     1 - they match RunnerTypeScaleConfig https://github.com/pytorch/test-infra/blob/f3c58fea68ec149391570d15a4d0a03bc26fbe4f/terraform-aws-github-runner/modules/runners/lambdas/runners/src/scale-runners/runners.ts#L50
     2 - they have a max_available of at least 50, or is not enforced
+    3 - a ephemeral variant is defined
     """
     invalid_runners = set()
 
@@ -158,6 +161,39 @@ def is_config_valid_internally(runner_types: Dict[str, Dict[str, str]]) -> bool:
             # so the next part of the code might break
             continue
 
+        # Unecessary validations, that could be a simple onliner, but Code scanning / lintrunner
+        # is mercerless and will complain about it
+        if "variants" not in runner_config:
+            print(f"Runner type {runner_type} does not have a variants section defined")
+            invalid_runners.add(runner_type)
+            continue
+        if not isinstance(runner_config["variants"], dict):
+            print(
+                f"Runner type {runner_type} has a variants section that is not a dictionary"
+            )
+            invalid_runners.add(runner_type)
+            continue
+
+        ephemeral_variant: Union[None, dict] = runner_config["variants"].get(
+            "ephemeral", None
+        )
+
+        if ephemeral_variant is None:
+            print(
+                f"Runner type {runner_type} does not have an ephemeral variant defined"
+            )
+            invalid_runners.add(runner_type)
+            continue
+        else:
+            if not ephemeral_variant.get(
+                "is_ephemeral", False
+            ) and not runner_config.get("is_ephemeral", False):
+                print(
+                    f"Runner type {runner_type} has an ephemeral variant that is not ephemeral"
+                )
+                invalid_runners.add(runner_type)
+                continue
+
         # Ensure that the max_available is at least MAX_AVAILABLE_MINIMUM
         # this is a requirement as scale-up always keeps at minimum some spare runners live, and less than MAX_AVAILABLE_MINIMUM
         # will very easily trigger alerts of not enough runners
@@ -170,6 +206,14 @@ def is_config_valid_internally(runner_types: Dict[str, Dict[str, str]]) -> bool:
                 "between other cases, will load a value as None when its property is "
                 "defined as null in the yaml file. It is preferable to remove the max_available "
                 "property or set it to a negative value."
+            )
+            invalid_runners.add(runner_type)
+        # This validation is absolute not necessary, as it is being validated on the jsonschema
+        # but it is here to make the code scanner happy
+        elif not isinstance(runner_config["max_available"], int):
+            print(
+                f"Runner type {runner_type} has max_available set to {runner_config['max_available']}, "
+                "which is not an integer"
             )
             invalid_runners.add(runner_type)
         elif (
@@ -225,7 +269,7 @@ def is_consistent_across_configs(
 
 
 def generate_repo_scale_config(
-    source_config_file: str, dest_config_file: str, expected_prefix: str
+    source_config_file: Path, dest_config_file: Path, expected_prefix: str
 ) -> None:
     """
     Generate the new scale config file with the same layout as the original file,
@@ -296,6 +340,10 @@ def main() -> None:
 
     # Contains scale configs that are generated from the source scale config
     generated_scale_config_infos: List[ScaleConfigInfo] = [
+        ScaleConfigInfo(
+            path=repo_root / META_CANARY_SCALE_CONFIG_PATH,
+            prefix=PREFIX_META_CANARY,
+        ),
         ScaleConfigInfo(
             path=repo_root / LF_SCALE_CONFIG_PATH,
             prefix=PREFIX_LF,

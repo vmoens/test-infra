@@ -2,7 +2,7 @@
 
 """Generates a matrix to be utilized through github actions
 
-Important. After making changes to this file please run following command: 
+Important. After making changes to this file please run following command:
 python -m tools.tests.test_generate_binary_build_matrix --update-reference-files
 
 Will output a condensed version of the matrix if on a pull request that only
@@ -14,39 +14,45 @@ architectures:
     * Latest XPU
 """
 
-
 import argparse
 import json
 import os
 import sys
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from typing import Dict, List, Optional, Tuple, Any, Callable
 
 PYTHON_ARCHES_DICT = {
-    "nightly": ["3.9", "3.10", "3.11", "3.12", "3.13"],
-    "test": ["3.9", "3.10", "3.11", "3.12", "3.13"],
-    "release": ["3.9", "3.10", "3.11", "3.12"],
+    "nightly": ["3.9", "3.10", "3.11", "3.12", "3.13", "3.13t"],
+    "test": ["3.9", "3.10", "3.11", "3.12", "3.13", "3.13t"],
+    "release": ["3.9", "3.10", "3.11", "3.12", "3.13", "3.13t"],
 }
 CUDA_ARCHES_DICT = {
-    "nightly": ["11.8", "12.4", "12.6"],
-    "test": ["11.8", "12.4", "12.6"],
-    "release": ["11.8", "12.1", "12.4"],
+    "nightly": ["11.8", "12.6", "12.8"],
+    "test": ["11.8", "12.6", "12.8"],
+    "release": ["11.8", "12.6", "12.8"],
 }
 ROCM_ARCHES_DICT = {
-    "nightly": ["6.2.4", "6.3"],
-    "test": ["6.1", "6.2.4"],
-    "release": ["6.1", "6.2"],
+    "nightly": ["6.3", "6.4"],
+    "test": ["6.2.4", "6.3"],
+    "release": ["6.2.4", "6.3"],
 }
 
-CUDA_CUDDN_VERSIONS = {
+CUDA_CUDNN_VERSIONS = {
     "11.8": {"cuda": "11.8.0", "cudnn": "9"},
-    "12.1": {"cuda": "12.1.1", "cudnn": "9"},
     "12.4": {"cuda": "12.4.1", "cudnn": "9"},
-    "12.6": {"cuda": "12.6.2", "cudnn": "9"},
+    "12.6": {"cuda": "12.6.3", "cudnn": "9"},
+    "12.8": {"cuda": "12.8.0", "cudnn": "9"},
 }
 
-PACKAGE_TYPES = ["wheel", "conda", "libtorch"]
-PRE_CXX11_ABI = "pre-cxx11"
+STABLE_CUDA_VERSIONS = {
+    "nightly": "12.6",
+    "test": "12.6",
+    "release": "12.6",
+}
+
+CUDA_AARCH64_ARCHES = ["12.8-aarch64"]
+
+PACKAGE_TYPES = ["wheel", "libtorch"]
 CXX11_ABI = "cxx11-abi"
 RELEASE = "release"
 DEBUG = "debug"
@@ -68,9 +74,9 @@ ROCM = "rocm"
 XPU = "xpu"
 
 
-CURRENT_NIGHTLY_VERSION = "2.7.0"
-CURRENT_CANDIDATE_VERSION = "2.6.0"
-CURRENT_STABLE_VERSION = "2.5.1"
+CURRENT_NIGHTLY_VERSION = "2.8.0"
+CURRENT_CANDIDATE_VERSION = "2.7.0"
+CURRENT_STABLE_VERSION = "2.7.0"
 CURRENT_VERSION = CURRENT_STABLE_VERSION
 
 # By default use Nightly for CUDA arches
@@ -105,7 +111,7 @@ def arch_type(arch_version: str) -> str:
         return ROCM
     elif arch_version == CPU_AARCH64:
         return CPU_AARCH64
-    elif arch_version == CUDA_AARCH64:
+    elif arch_version in CUDA_AARCH64_ARCHES:
         return CUDA_AARCH64
     elif arch_version == XPU:
         return XPU
@@ -156,6 +162,10 @@ def initialize_globals(channel: str, build_python_only: bool) -> None:
             for gpu_arch in CUDA_ARCHES
         },
         **{
+            gpu_arch: f"pytorch/manylinuxaarch64-builder:cuda{gpu_arch.replace('-aarch64', '')}"
+            for gpu_arch in CUDA_AARCH64_ARCHES
+        },
+        **{
             gpu_arch: f"pytorch/manylinux2_28-builder:rocm{gpu_arch}"
             for gpu_arch in ROCM_ARCHES
         },
@@ -167,22 +177,13 @@ def initialize_globals(channel: str, build_python_only: bool) -> None:
     }
     LIBTORCH_CONTAINER_IMAGES = {
         **{
-            (gpu_arch, PRE_CXX11_ABI): f"pytorch/manylinux-builder:cuda{gpu_arch}"
-            for gpu_arch in CUDA_ARCHES
-        },
-        **{
             (gpu_arch, CXX11_ABI): f"pytorch/libtorch-cxx11-builder:cuda{gpu_arch}"
             for gpu_arch in CUDA_ARCHES
-        },
-        **{
-            (gpu_arch, PRE_CXX11_ABI): f"pytorch/manylinux-builder:rocm{gpu_arch}"
-            for gpu_arch in ROCM_ARCHES
         },
         **{
             (gpu_arch, CXX11_ABI): f"pytorch/libtorch-cxx11-builder:rocm{gpu_arch}"
             for gpu_arch in ROCM_ARCHES
         },
-        (CPU, PRE_CXX11_ABI): "pytorch/manylinux-builder:cpu",
         (CPU, CXX11_ABI): "pytorch/libtorch-cxx11-builder:cpu",
     }
 
@@ -191,7 +192,7 @@ def translate_desired_cuda(gpu_arch_type: str, gpu_arch_version: str) -> str:
     return {
         CPU: "cpu",
         CPU_AARCH64: CPU,
-        CUDA_AARCH64: "cu126",
+        CUDA_AARCH64: f"cu{gpu_arch_version.replace('-aarch64', '').replace('.', '')}",
         CUDA: f"cu{gpu_arch_version.replace('.', '')}",
         ROCM: f"rocm{gpu_arch_version}",
         XPU: "xpu",
@@ -288,7 +289,7 @@ def get_wheel_install_command(
         channel == RELEASE
         and (not use_only_dl_pytorch_org)
         and (
-            (gpu_arch_version == "12.4" and os == LINUX)
+            (gpu_arch_version == STABLE_CUDA_VERSIONS[channel] and os == LINUX)
             or (gpu_arch_type == CPU and os in [WINDOWS, MACOS_ARM64])
             or (os == LINUX_AARCH64)
         )
@@ -301,23 +302,6 @@ def get_wheel_install_command(
             else f"{WHL_INSTALL_BASE} {PACKAGES_TO_INSTALL_WHL}"
         )
         return f"{whl_install_command} --index-url {get_base_download_url_for_repo('whl', channel, gpu_arch_type, desired_cuda)}"  # noqa: E501
-
-
-def generate_conda_matrix(
-    os: str,
-    channel: str,
-    with_cuda: str,
-    with_rocm: str,
-    with_cpu: str,
-    with_xpu: str,
-    limit_pr_builds: bool,
-    use_only_dl_pytorch_org: bool,
-    use_split_build: bool = False,
-    python_versions: Optional[List[str]] = None,
-) -> List[Dict[str, str]]:
-    ret: List[Dict[str, str]] = []
-    # return empty list. Conda builds are deprecated, see https://github.com/pytorch/pytorch/issues/138506
-    return ret
 
 
 def generate_libtorch_matrix(
@@ -353,7 +337,7 @@ def generate_libtorch_matrix(
         if os == WINDOWS:
             abi_versions = [RELEASE, DEBUG]
         elif os == LINUX:
-            abi_versions = [PRE_CXX11_ABI, CXX11_ABI]
+            abi_versions = [CXX11_ABI]
         elif os in [MACOS_ARM64]:
             abi_versions = [CXX11_ABI]
         else:
@@ -374,10 +358,6 @@ def generate_libtorch_matrix(
                 # matter
                 gpu_arch_type = arch_type(arch_version)
                 gpu_arch_version = "" if arch_version == CPU else arch_version
-
-                # Rocm builds where removed for pre-cxx11 abi 
-                if gpu_arch_type == "rocm" and abi_version == PRE_CXX11_ABI:  
-                    continue
 
                 desired_cuda = translate_desired_cuda(gpu_arch_type, gpu_arch_version)
                 devtoolset = abi_version if os != WINDOWS else ""
@@ -446,17 +426,14 @@ def generate_wheels_matrix(
         arches = []
 
         if with_cpu == ENABLE:
-            arches += [CPU]
-
-        if os == LINUX_AARCH64:
-            # Only want the one arch as the CPU type is different and
-            # uses different build/test scripts
-            arches = [CPU_AARCH64, CUDA_AARCH64]
+            arches += [CPU_AARCH64] if os == LINUX_AARCH64 else [CPU]
 
         if with_cuda == ENABLE:
             upload_to_base_bucket = "no"
             if os in (LINUX, WINDOWS):
                 arches += CUDA_ARCHES
+            elif os == LINUX_AARCH64:
+                arches += CUDA_AARCH64_ARCHES
 
         if with_rocm == ENABLE and os == LINUX:
             arches += ROCM_ARCHES
@@ -472,11 +449,14 @@ def generate_wheels_matrix(
     ret: List[Dict[str, Any]] = []
     for python_version in python_versions:
         for arch_version in arches:
-
             gpu_arch_type = arch_type(arch_version)
             gpu_arch_version = (
                 "" if arch_version in [CPU, CPU_AARCH64, XPU] else arch_version
             )
+
+            # TODO: Enable python 3.13t on cpu-s390x or Windows
+            if (gpu_arch_type == "cpu-s390x") and python_version == "3.13t":
+                continue
 
             desired_cuda = translate_desired_cuda(gpu_arch_type, gpu_arch_version)
             entry = {
@@ -525,7 +505,6 @@ def generate_wheels_matrix(
 
 GENERATING_FUNCTIONS_BY_PACKAGE_TYPE: Dict[str, Callable[..., List[Dict[str, str]]]] = {
     "wheel": generate_wheels_matrix,
-    "conda": generate_conda_matrix,
     "libtorch": generate_libtorch_matrix,
 }
 

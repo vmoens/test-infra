@@ -104,7 +104,7 @@ jobs:
       REPOSITORY: ${{ inputs.repository }}
       REF: ${{ inputs.ref }}
       CU_VERSION: ${{ matrix.desired_cuda }}
-    name: ${{ matrix.build_name }}
+    name: build-${{ matrix.build_name }}
     runs-on: ${{ inputs.runner-type }}
     # If a build is taking longer than 60 minutes on these runners we need
     # to have a conversation
@@ -252,7 +252,7 @@ jobs:
       # NB: Only upload to GitHub after passing smoke tests
       - name: Upload wheel to GitHub
         continue-on-error: true
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ inputs.repository }}/dist/

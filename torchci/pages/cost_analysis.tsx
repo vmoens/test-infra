@@ -2,7 +2,7 @@ import {
   Box,
   FormControl,
   FormGroup,
-  Grid,
+  Grid2,
   InputLabel,
   MenuItem,
   Select,
@@ -24,8 +24,9 @@ import TimeSeriesPanel, {
 import MultiSelectPicker from "components/MultiSelectPicker";
 import dayjs from "dayjs";
 import { fetcher } from "lib/GeneralUtils";
+import _ from "lodash";
 import { useRouter } from "next/router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { BiLineChart } from "react-icons/bi";
 import { FaFilter, FaInfoCircle, FaRegChartBar } from "react-icons/fa";
 import { MdOutlineStackedBarChart } from "react-icons/md";
@@ -35,7 +36,6 @@ function CustomDatePicker({ label, value, setValue }: any) {
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <DatePicker
-        renderInput={(props) => <TextField {...props} />}
         label={label}
         value={value}
         onChange={(newValue) => {
@@ -228,14 +228,14 @@ export default function Page() {
     : PROVIDER_OPTIONS;
   const initialSelectedYAxis = (query.yAxis as YAxis) || "cost";
   const initialSearchFilter = query.searchFilter || "";
-  const initialSelectedRepos = query.repos
-    ? splitString(query.repos)
-    : undefined;
+  const initialIsRegex = query.isRegex === "true";
+  const initialSelectedRepos = query.repos ? splitString(query.repos) : [];
 
   // State variables
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialEndDate);
-  const [selectedRepos, setSelectedRepos] = useState<string[]>();
+  const [selectedRepos, setSelectedRepos] =
+    useState<string[]>(initialSelectedRepos);
   const [availableRepos, setAvailableRepos] = useState<string[]>([]);
 
   const [granularity, setGranularity] = useState<Granularity>(
@@ -261,6 +261,7 @@ export default function Page() {
   const [searchFilter, setSearchFilter] = useState(
     initialSearchFilter as string
   );
+  const [isRegex, setIsRegex] = useState(initialIsRegex);
 
   const [routerReady, setRouterReady] = useState(false);
 
@@ -278,6 +279,10 @@ export default function Page() {
     setSelectedProviders(initialSelectedProviders);
     setSelectedYAxis(initialSelectedYAxis || "cost");
     setSearchFilter(initialSearchFilter as string);
+    setIsRegex(initialIsRegex);
+    if (initialSelectedRepos) {
+      setSelectedRepos(initialSelectedRepos);
+    }
   }
 
   const timeParamsClickHouse = {
@@ -297,15 +302,14 @@ export default function Page() {
     isLoading,
   } = useSWR<{ repo: string }[]>(url, fetcher);
 
-  if (selectedRepos === undefined && repos) {
+  if (repos && availableRepos.length === 0) {
     const repoList = repos?.map((item) => item.repo) ?? [];
     setAvailableRepos(repoList);
-    if (initialSelectedRepos) {
-      setSelectedRepos(initialSelectedRepos);
-    } else {
+
+    if (!selectedRepos || selectedRepos.length === 0) {
+      // Only set all repos if none are already selected from URL params
       setSelectedRepos(repoList);
     }
-  } else {
   }
 
   // Update URL params on state change
@@ -344,6 +348,10 @@ export default function Page() {
 
     if (selectedYAxis) params.set("yAxis", selectedYAxis);
     if (searchFilter) params.set("searchFilter", searchFilter);
+    if (isRegex) params.set("isRegex", isRegex.toString());
+    if (selectedRepos && selectedRepos.length < availableRepos.length) {
+      params.set("repos", selectedRepos.join(","));
+    }
 
     router.push({
       pathname: router.pathname,
@@ -362,6 +370,7 @@ export default function Page() {
     selectedOwners,
     selectedYAxis,
     searchFilter,
+    isRegex,
     selectedRepos,
   ]);
 
@@ -370,7 +379,7 @@ export default function Page() {
     yAxis: "cost" | "duration"
   ) => {
     return (
-      <Grid item xs={8} height={ROW_HEIGHT}>
+      <Grid2 size={{ xs: 8 }} height={ROW_HEIGHT}>
         {!isLoading && (
           <TimeSeriesPanel
             title={`CI ${yAxis} per ${groupby} per ${granularity}`}
@@ -392,6 +401,7 @@ export default function Page() {
             smooth={false}
             chartType={chartType}
             filter={searchFilter}
+            isRegex={isRegex}
             timeFieldDisplayFormat="M/D (UTC)"
             sort_by="total"
             auto_refresh={false}
@@ -399,7 +409,7 @@ export default function Page() {
           />
         )}
         {isLoading && <div>Loading...</div>}
-      </Grid>
+      </Grid2>
     );
   };
 
@@ -408,12 +418,14 @@ export default function Page() {
       marginTop: 20,
     };
     return (
-      <div>
-        <Typography fontSize={"1rem"} fontWeight={"bold"}>
-          Dimension
-        </Typography>
-        <Grid item xs={2} style={marginStyle}>
-          <FormControl style={{ width: 195 }}>
+      <Grid2 size={{ xs: 2 }} container columns={2}>
+        <Grid2 size={{ xs: 2 }}>
+          <Typography fontSize={"1rem"} fontWeight={"bold"}>
+            Dimension
+          </Typography>
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
+          <FormControl style={{ width: "100%" }}>
             <InputLabel id="y-axis-select-label">Y-Axis</InputLabel>
             <Select
               value={selectedYAxis}
@@ -427,17 +439,17 @@ export default function Page() {
               <MenuItem value={"duration"}>Duration</MenuItem>
             </Select>
           </FormControl>
-        </Grid>
-
-        <div style={{ marginTop: 25, marginBottom: 25 }}>
-          <hr />
-        </div>
-        <Typography fontSize={"1rem"} fontWeight={"bold"}>
-          Grouping
-        </Typography>
-
-        <Grid item xs={2} style={marginStyle}>
-          <FormControl style={{ width: 195 }}>
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
+          <div style={{ marginTop: 25, marginBottom: 25 }}>
+            <hr />
+          </div>
+          <Typography fontSize={"1rem"} fontWeight={"bold"}>
+            Grouping
+          </Typography>
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
+          <FormControl style={{ width: "100%" }}>
             <InputLabel id="group-by-select-label">Group By</InputLabel>
             <Select
               value={groupby}
@@ -455,17 +467,20 @@ export default function Page() {
               <MenuItem value={"repo"}>Repository</MenuItem>
             </Select>
           </FormControl>
-        </Grid>
-        {generateFilterBar(groupby, marginStyle)}
-
-        <div style={{ marginTop: 25, marginBottom: 25 }}>
-          <hr />
-        </div>
-        <Typography fontSize={"1rem"} fontWeight={"bold"}>
-          Filters
-        </Typography>
-        <Grid item xs={2} style={marginStyle}>
-          {!isLoading && (
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
+          {generateFilterBar(groupby, marginStyle)}
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
+          <div style={{ marginTop: 25, marginBottom: 25 }}>
+            <hr />
+          </div>
+          <Typography fontSize={"1rem"} fontWeight={"bold"}>
+            Filters
+          </Typography>
+        </Grid2>
+        {!isLoading && (
+          <Grid2 size={{ xs: 2 }}>
             <MultiSelectPicker
               initialSelected={selectedRepos}
               onSelectChanged={setSelectedRepos}
@@ -479,11 +494,11 @@ export default function Page() {
                   .map((item: string) => item?.split("/")[1])
                   .join(",");
               }}
-              style={{ width: 195 }}
+              style={{ width: "100%" }}
             />
-          )}
-        </Grid>
-        <Grid item xs={2} style={marginStyle}>
+          </Grid2>
+        )}
+        <Grid2 size={{ xs: 2 }}>
           <MultiSelectPicker
             initialSelected={selectedOS}
             onSelectChanged={setSelectedOS}
@@ -494,10 +509,10 @@ export default function Page() {
               if (selectedItems.length == 0) return "None";
               return selectedItems.join(",");
             }}
-            style={{ width: 195 }}
+            style={{ width: "100%" }}
           />
-        </Grid>
-        <Grid item xs={2} style={marginStyle}>
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
           <MultiSelectPicker
             initialSelected={selectedProviders}
             onSelectChanged={setSelectedProviders}
@@ -508,10 +523,10 @@ export default function Page() {
               if (selectedItems.length == 0) return "None";
               return selectedItems.join(",");
             }}
-            style={{ width: 195 }}
+            style={{ width: "100%" }}
           />
-        </Grid>
-        <Grid item xs={2} style={marginStyle}>
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
           <MultiSelectPicker
             initialSelected={selectedOwners}
             onSelectChanged={setSelectedOwners}
@@ -522,10 +537,10 @@ export default function Page() {
               if (selectedItems.length == 0) return "None";
               return selectedItems.join(",");
             }}
-            style={{ width: 195 }}
+            style={{ width: "100%" }}
           />
-        </Grid>
-        <Grid item xs={1} style={marginStyle}>
+        </Grid2>
+        <Grid2 size={{ xs: 2 }}>
           <MultiSelectPicker
             initialSelected={selectedGPU.map((item) =>
               item === 1 ? "gpu" : "non-gpu"
@@ -548,25 +563,43 @@ export default function Page() {
               if (selectedItems.length == 0) return "None";
               return selectedItems.join(",");
             }}
-            style={{ width: 195 }}
+            style={{ width: "100%" }}
           />
-        </Grid>
-      </div>
+        </Grid2>
+      </Grid2>
     );
   };
 
+  // Create debounced search filter update function - defined once
+  const debouncedSetSearchFilter = useCallback(
+    _.debounce((value: string) => {
+      setSearchFilter(value);
+    }, 500),
+    [] // Empty dependency array ensures this is created only once
+  );
+
+  // Local state for input value to keep input responsive
+  const [inputValue, setInputValue] = useState(initialSearchFilter || "");
+
+  // Update inputValue when searchFilter changes from URL/elsewhere
+  useEffect(() => {
+    setInputValue(searchFilter);
+  }, [searchFilter]);
+
   const generateFilterBar = (type: CostCategory, style = {}) => {
+    // Update the local input value immediately for responsiveness
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
-      setTimeout(() => {
-        setSearchFilter(() => {
-          return value;
-        });
-      }, 500);
+      setInputValue(value);
+      debouncedSetSearchFilter(value);
+    };
+
+    const handleRegexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setIsRegex(e.target.checked);
     };
 
     return (
-      <Grid item xs={12} style={style}>
+      <Box>
         <TextField
           id={`outlined-basic-${type}`}
           label={
@@ -576,8 +609,49 @@ export default function Page() {
           }
           onChange={handleChange}
           variant="outlined"
+          fullWidth
+          value={inputValue}
+          InputProps={{
+            endAdornment: (
+              <Tooltip
+                title={
+                  isRegex
+                    ? "Disable regex pattern matching"
+                    : "Enable regex pattern matching"
+                }
+              >
+                <div
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setIsRegex(!isRegex)}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "4px 8px",
+                      marginRight: "4px",
+                      borderRadius: "4px",
+                      fontSize: "0.75rem",
+                      fontFamily: "monospace",
+                      backgroundColor: isRegex
+                        ? "rgba(63, 81, 181, 0.1)"
+                        : "transparent",
+                      color: isRegex ? "primary.main" : "text.secondary",
+                      border: isRegex
+                        ? "1px solid rgba(63, 81, 181, 0.5)"
+                        : "1px solid transparent",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    .*
+                  </div>
+                </div>
+              </Tooltip>
+            ),
+          }}
         />
-      </Grid>
+      </Box>
     );
   };
 
@@ -608,8 +682,8 @@ export default function Page() {
         />
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid item xs={8}>
+      <Grid2 container spacing={2}>
+        <Grid2 size={{ xs: 8 }}>
           <DateRangePicker
             startDate={startDate}
             setStartDate={setStartDate}
@@ -663,7 +737,7 @@ export default function Page() {
                       alignItems="center"
                       justifyContent="center"
                     >
-                      <MdOutlineStackedBarChart size={"2em"} fill="#444" />
+                      <MdOutlineStackedBarChart size={"2em"} />
                     </Box>
                   </Tooltip>
                 </ToggleButton>
@@ -674,7 +748,7 @@ export default function Page() {
                       alignItems="center"
                       justifyContent="center"
                     >
-                      <FaRegChartBar size={"2em"} fill="#444" />
+                      <FaRegChartBar size={"2em"} />
                     </Box>
                   </Tooltip>
                 </ToggleButton>
@@ -685,25 +759,25 @@ export default function Page() {
                       alignItems="center"
                       justifyContent="center"
                     >
-                      <BiLineChart size={"2em"} fill="#444" />
+                      <BiLineChart size={"2em"} />
                     </Box>
                   </Tooltip>
                 </ToggleButton>
               </ToggleButtonGroup>
             </FormGroup>
           </FormControl>
-        </Grid>
-      </Grid>
-      <Grid container spacing={2}>
-        <Grid container marginTop={4}>
+        </Grid2>
+      </Grid2>
+      <Grid2 container spacing={2}>
+        <Grid2 container marginTop={4} size={{ xs: 12 }}>
           {generateTimeSeriesGridItem(
             groupby || "workflow_name",
             selectedYAxis || "cost"
           )}
-          <Grid item xs={1}></Grid>
+          <Grid2 size={{ xs: 1 }}></Grid2>
           {generateGroupByAndFilterBar()}
-        </Grid>
-      </Grid>
+        </Grid2>
+      </Grid2>
     </div>
   );
 }
