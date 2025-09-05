@@ -5,6 +5,7 @@ import { propsReducer } from "components/benchmark/llms/context/BenchmarkProps";
 import { DateRangePicker } from "components/queueTimeAnalysis/components/pickers/DateRangePicker";
 import { TimeGranuityPicker } from "components/queueTimeAnalysis/components/pickers/TimeGranuityPicker";
 import dayjs from "dayjs";
+import { trackEventWithContext } from "lib/tracking/track";
 import { cloneDeep } from "lodash";
 import { NextRouter } from "next/router";
 import { ParsedUrlQuery } from "querystring";
@@ -17,13 +18,31 @@ import {
   RainbowScrollStyle,
 } from "./SharedUIElements";
 
-function splitString(input: string | string[]): string[] {
+export function normalizeQueryParamToArray(
+  input: string | string[] | undefined
+): string[] {
+  if (!input) return [];
+
+  const handleOne = (val: string): string[] => {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed) && parsed.every((i) => typeof i === "string")) {
+        return parsed;
+      }
+    } catch {
+      // not JSON, fallback
+    }
+    return val
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
   if (Array.isArray(input)) {
-    // Join the array into a single string, separating elements with a comma
-    return input;
+    return input.flatMap(handleOne);
   }
-  // If it's already a string, return it as is
-  return input.split(",");
+
+  return handleOne(input);
 }
 
 export interface QueueTimeSearchBarOptions {
@@ -145,7 +164,7 @@ export default function QueueTimeSearchBar({
   const [props, dispatch] = useReducer(propsReducer, null);
   useEffect(() => {
     const rQuery = router.query as ParsedUrlQuery;
-    const newprops = {
+    let newprops = {
       dateRange: rQuery.dateRange
         ? parseInt(rQuery.dateRange as string)
         : rQuery.startDate || rQuery.endDate
@@ -165,17 +184,58 @@ export default function QueueTimeSearchBar({
       granularity: (rQuery.granularity as string) || "half_hour",
       chartType: (rQuery.chartType as string) || "bar",
       repos: rQuery.repos
-        ? splitString(rQuery.repos as string)
+        ? normalizeQueryParamToArray(rQuery.repos as string)
         : ["pytorch/pytorch"],
       category: rQuery.category ? (rQuery.category as string) : "workflow_name",
-      items: rQuery.items ? splitString(rQuery.items as string) : null, // if items is not specified, it will fetch all items belongs to category
+      workflowNames: rQuery.workflowNames
+        ? normalizeQueryParamToArray(rQuery.workflowNames as string)
+        : [],
+      jobNames: rQuery.jobNames
+        ? normalizeQueryParamToArray(rQuery.jobNames as string)
+        : [],
+      machineTypes: rQuery.machineTypes
+        ? normalizeQueryParamToArray(rQuery.machineTypes as string)
+        : [],
+      runnerLabels: rQuery.runnerLabels
+        ? normalizeQueryParamToArray(rQuery.runnerLabels as string)
+        : [],
+      items: rQuery.items
+        ? normalizeQueryParamToArray(rQuery.items as string)
+        : [],
     };
+
+    if (rQuery.items) {
+      const items = normalizeQueryParamToArray(rQuery.items as string); // if items is not specified, it will fetch all items belongs to category
+      newprops = getSearchItems(newprops.category, items, newprops);
+    }
     updateSearch({ type: "UPDATE_FIELDS", payload: newprops });
     dispatch({ type: "UPDATE_FIELDS", payload: newprops });
   }, [router.query]);
 
+  const getSearchItems = (
+    category: string,
+    items: string[],
+    props: any
+  ): any => {
+    switch (category) {
+      case "workflow_name":
+        return { ...props, workflowNames: items };
+      case "job_name":
+        return { ...props, jobNames: items };
+      case "machine_type":
+        return { ...props, machineTypes: items };
+      case "runner_label":
+        return { ...props, runnerLabels: items };
+      default:
+        return props;
+    }
+  };
+
   const onSearch = () => {
     const newprops = cloneDeep(props);
+    trackEventWithContext("qta_search", "user_interaction", "button_click", {
+      data: newprops.category,
+    });
     updateSearch({ type: "UPDATE_FIELDS", payload: newprops });
   };
 
@@ -219,7 +279,7 @@ export default function QueueTimeSearchBar({
                   setStopDate={(val: any) => {
                     dispatch({
                       type: "UPDATE_FIELD",
-                      field: "stopDate",
+                      field: "endDate",
                       value: val,
                     });
                   }}
@@ -261,7 +321,12 @@ export default function QueueTimeSearchBar({
                   startDate={props.startDate}
                   endDate={props.endDate}
                   updateFields={(val: any) => {
-                    dispatch({ type: "UPDATE_FIELDS", payload: val });
+                    const payload = getSearchItems(
+                      props.category,
+                      val.items,
+                      val
+                    );
+                    dispatch({ type: "UPDATE_FIELDS", payload: payload });
                   }}
                 />
               </div>
@@ -269,7 +334,15 @@ export default function QueueTimeSearchBar({
           </ScrollBar>
           <SearchButton>
             <Box sx={{ borderBottom: "1px solid #eee", padding: "0 0" }} />
-            <RainbowButton onClick={onSearch}>Search</RainbowButton>
+            <RainbowButton
+              data-ga-action="qta_search_click"
+              data-ga-label="search_button"
+              data-ga-category="cta"
+              data-ga-event-types="click"
+              onClick={onSearch}
+            >
+              Search
+            </RainbowButton>
             <FormHelperText>
               <span style={{ color: "red" }}>*</span> Click to apply filter
               changes

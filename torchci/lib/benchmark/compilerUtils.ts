@@ -99,6 +99,8 @@ export function computePassrate(
 
     const [bucket, workflowId, suite, compiler] = key.split("+");
     passrate.push({
+      metric: "passrate",
+      value: p,
       granularity_bucket: bucket,
       workflow_id: workflowId,
       suite: suite,
@@ -163,6 +165,8 @@ export function computeGeomean(
 
     const [bucket, workflowId, suite, compiler] = key.split("+");
     returnedGeomean.push({
+      metric: "geomean",
+      value: Number(gm),
       granularity_bucket: bucket,
       workflow_id: workflowId,
       suite: suite,
@@ -274,6 +278,7 @@ export function computeCompilationTime(
 
     const [bucket, workflowId, suite, compiler] = key.split("+");
     returnedCompTime.push({
+      metric: "compilation_latency",
       granularity_bucket: bucket,
       workflow_id: workflowId,
       suite: suite,
@@ -328,6 +333,8 @@ export function computeMemoryCompressionRatio(
 
     const [bucket, workflowId, suite, compiler] = key.split("+");
     returnedMemory.push({
+      metric: "compression_ratio",
+      value: Number(m.toFixed(SCALE)),
       granularity_bucket: bucket,
       workflow_id: workflowId,
       suite: suite,
@@ -379,6 +386,8 @@ export function computePeakMemoryUsage(
 
     const [bucket, workflowId, suite, compiler] = key.split("+");
     returnedMemory.push({
+      metric: "dynamo_peak_mem",
+      value: Number(m.toFixed(SCALE)),
       granularity_bucket: bucket,
       workflow_id: workflowId,
       suite: suite,
@@ -390,102 +399,42 @@ export function computePeakMemoryUsage(
   return returnedMemory;
 }
 
-// Generate extra entries for reporting purposes
-export function augmentData(data: CompilerPerformanceData[]) {
-  if (data === undefined) return data;
-  const groups: { [key: string]: { [key: string]: Set<string> } } = {
-    dynamic: {
-      // NB: Not all of these actually exercise dynamic shapes,
-      // so our numbers may be over-inflated.  Threats to validity
-      // listed below.  Note that in all cases they are run with
-      // dynamic batch size, so you are at least getting some
-      // information that way.
-      torchbench: new Set([
-        // _generate variants are good; they do E2E autoregressive
-        // generation and will induce varying context length.
-        "cm3leon_generate",
-        "nanogpt",
-        "hf_T5_generate",
-        "nanogpt",
-        // detection models are ok-ish; the good news is they call
-        // nonzero internally and exercise dynamic shapes that way,
-        // the bad news is we may not run enough iterations with
-        // varying data to get varying numbers of bounding boxes.
-        "detectron2_fcos_r_50_fpn",
-        "vision_maskrcnn",
-        // this recommendation model internally uses sparse tensors
-        // but once again it's not clear that dynamic shapes is exercised
-        // on this sparsity
-        "dlrm",
-        // these language models are only running a single next
-        // word prediction, we're NOT testing dynamic sequence length
-        // performance
-        "llama",
-        "BERT_pytorch",
-        "hf_T5",
-        // the GNN benchmarks only one run one batch so you
-        // aren't actually triggering dynamism (and we didn't
-        // explicitly mark something as dynamic)
-        "basic_gnn_edgecnn",
-        "basic_gnn_gcn",
-        "basic_gnn_gin",
-        "basic_gnn_sage",
-      ]),
-      huggingface: new Set([]),
-    },
-    blueberries: {
-      torchbench: new Set([
-        "nanogpt",
-        "llama",
-        "llama_v2_7b_16h",
-        "sam",
-        "sam_fast",
-        "clip",
-        "stable_diffusion_text_encoder",
-        "hf_Whisper",
-      ]),
-    },
-  };
-
-  function GenerateGroup(data: CompilerPerformanceData[], n: string) {
-    const l = groups[n];
-    return data
-      .filter((e: CompilerPerformanceData) => {
-        return e.suite in l && l[e.suite].has(e.name);
-      })
-      .map((e) => {
-        return { ...e, suite: n };
-      });
-  }
-
-  return ([] as CompilerPerformanceData[]).concat(
-    data,
-    ...Object.keys(groups).map((n) => GenerateGroup(data, n))
-  );
-}
-
-// TODO (huydhn): Use this function to convert the generic benchmark data to the old
-// CompilerPerformanceData format. This is needed until the TorchInductor dashboard
-// is migrated to the new format
+// Use this function to convert the generic benchmark data to the old
+// CompilerPerformanceData format. Maybe we can get rid of this once
+// we have a new UX for benchmark dashboard 2.0
 export function convertToCompilerPerformanceData(data: BenchmarkData[]) {
   const convertData: { [model: string]: CompilerPerformanceData } = {};
   if (data === undefined || data === null) {
     return [];
   }
 
+  const workflowBucket: { [id: number]: string } = {};
+  // One different in the new benchmark CI is that the results will be
+  // uploaded right away when the benchmark job finishes. This means
+  // that jobs in the same workflow could have different timestamp and
+  // thus, different granularity bucket. The current dashboard logic
+  // doesn't like that, so we will just keep the earliest timestamp here
   data.forEach((r: BenchmarkData) => {
-    const k = `${r.granularity_bucket} ${r.model}`;
+    const id = r.workflow_id;
+
+    if (!(id in workflowBucket)) {
+      workflowBucket[id] = r.granularity_bucket;
+    }
+  });
+
+  data.forEach((r: BenchmarkData) => {
+    const k = `${r.workflow_id} ${r.model} ${r.backend}`;
 
     if (!(k in convertData)) {
       convertData[k] = {
         abs_latency: 0,
         accuracy: "",
         compilation_latency: 0,
-        compiler: "default",
+        compiler: r.backend as string,
         compression_ratio: 0,
         dynamo_peak_mem: 0,
         eager_peak_mem: 0,
-        granularity_bucket: r.granularity_bucket,
+        granularity_bucket: workflowBucket[r.workflow_id],
         name: r.model,
         speedup: 0,
         suite: r.suite,

@@ -23,6 +23,7 @@ on:
           - torchtune
           - torchcodec
           - torchvision-extra-decoders
+          - torchtitan
           - all
 jobs:
   trigger:
@@ -30,7 +31,7 @@ jobs:
     environment: trigger-nightly
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Trigger nightly audio build
         if: ${{ github.event_name == 'schedule' ||  inputs.domain == 'audio' || inputs.domain == 'all' }}
         uses: ./.github/actions/trigger-nightly
@@ -116,6 +117,14 @@ jobs:
         uses: ./.github/actions/trigger-nightly
         with:
           ref: main
-          repository: pytorch-labs/torchvision-extra-decoders
+          repository: meta-pytorch/torchvision-extra-decoders
           token: ${{ secrets.GH_PYTORCHBOT_TOKEN }}
           path: torchvision-extra-decoders
+      - name: Trigger nightly torchtitan
+        if: ${{ github.event_name == 'schedule' ||  inputs.domain == 'torchtitan' || inputs.domain == 'all' }}
+        uses: ./.github/actions/trigger-nightly
+        with:
+          ref: main
+          repository: pytorch/torchtitan
+          token: ${{ secrets.GH_PYTORCHBOT_TOKEN }}
+          path: torchtitan

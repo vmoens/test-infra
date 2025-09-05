@@ -9,6 +9,13 @@ import { getJoinedStressTestExperiment, redisCached, redisLocked } from './cache
 import moment from 'moment';
 import { RetryableScalingError } from './scale-up';
 
+export class NoRunnersAvailable extends Error {
+  constructor() {
+    super('No runners available');
+    this.name = 'NoRunnersAvailable';
+  }
+}
+
 export interface ListRunnerFilters {
   applicationDeployDatetime?: string;
   containsTags?: Array<string>;
@@ -61,8 +68,6 @@ export interface DescribeInstancesResultRegion {
   describeInstanceResult: PromiseResult<EC2.Types.DescribeInstancesResult, AWS.AWSError>;
 }
 
-const SHOULD_NOT_TRY_LIST_SSM = 'SHOULD_NOT_TRY_LIST_SSM';
-
 // Keep the cache as long as half of minimum time, this should reduce calls to AWS API
 const ssmParametersCache = new LRU({ maxAge: (Config.Instance.minimumRunningTimeInMinutes * 60 * 1000) / 2 });
 
@@ -72,11 +77,34 @@ export function resetRunnersCaches() {
 
 export async function findAmiID(metrics: Metrics, region: string, filter: string, owners = 'amazon'): Promise<string> {
   const ec2 = new EC2({ region: region });
+  // Check if filter contains separator '|' and extract image name and account ID
+  let imageName = filter;
+  let actualOwners = owners;
+
+  if (filter.includes('|')) {
+    const parts = filter.split('|');
+    if (parts.length === 2) {
+      imageName = parts[0].trim();
+      const extractedOwner = parts[1].trim();
+
+      // Check if the extracted owner is only numbers (AWS account ID format)
+      if (/^\d+$/.test(extractedOwner)) {
+        actualOwners = extractedOwner;
+      } else {
+        console.error(
+          `Invalid account ID format: '${extractedOwner}'. Account ID must` +
+            ` contain only numbers. Using default value '${actualOwners}'`,
+        );
+      }
+    }
+  }
+
   const filters = [
-    { Name: 'name', Values: [filter] },
+    { Name: 'name', Values: [imageName] },
     { Name: 'state', Values: ['available'] },
   ];
-  return redisCached('awsEC2', `findAmiID-${region}-${filter}-${owners}`, 10 * 60, 0.5, () => {
+
+  return redisCached('awsEC2', `findAmiID-${region}-${imageName}-${actualOwners}`, 10 * 60, 0.5, () => {
     return expBackOff(() => {
       return metrics.trackRequestRegion(
         region,
@@ -84,7 +112,7 @@ export async function findAmiID(metrics: Metrics, region: string, filter: string
         metrics.ec2DescribeImagesFailure,
         () => {
           return ec2
-            .describeImages({ Owners: [owners], Filters: filters })
+            .describeImages({ Owners: [actualOwners], Filters: filters })
             .promise()
             .then((data: EC2.DescribeImagesResult) => {
               /* istanbul ignore next */
@@ -174,7 +202,7 @@ export async function listRunners(
                     .describeInstances({ Filters: ec2Filters })
                     .promise()
                     .then((describeInstanceResult): DescribeInstancesResultRegion => {
-                      const listOfRunnersIdType: string[] = (
+                      (
                         describeInstanceResult?.Reservations?.flatMap((reservation) => {
                           return (
                             reservation.Instances?.map((instance) => {
@@ -190,7 +218,6 @@ export async function listRunners(
                           `.describeInstances({ Filters: ${JSON.stringify(ec2Filters)} }) = ` +
                           `${describeInstanceResult?.Reservations?.length ?? 'UNDEF'}`,
                       );
-                      console.debug(`[listRunners]: ${listOfRunnersIdType.join('\n ')}`);
                       return { describeInstanceResult, awsRegion };
                     });
                 },
@@ -328,31 +355,6 @@ export async function terminateRunner(runner: RunnerInfo, metrics: Metrics): Pro
       );
     });
     console.info(`Runner terminated: ${runner.instanceId} ${runner.runnerType}`);
-
-    const paramName = getParameterNameForRunner(runner.environment || Config.Instance.environment, runner.instanceId);
-    const cacheName = `${SHOULD_NOT_TRY_LIST_SSM}_${runner.awsRegion}`;
-
-    if (ssmParametersCache.has(cacheName)) {
-      doDeleteSSMParameter(paramName, metrics, runner.awsRegion);
-    } else {
-      try {
-        const params = await listSSMParameters(metrics, runner.awsRegion);
-
-        if (params.has(paramName)) {
-          doDeleteSSMParameter(paramName, metrics, runner.awsRegion);
-        } else {
-          /* istanbul ignore next */
-          console.info(`[${runner.awsRegion}] Parameter "${paramName}" not found in SSM, no need to delete it`);
-        }
-      } catch (e) {
-        ssmParametersCache.set(cacheName, 1, 60 * 1000);
-        console.error(
-          `[terminateRunner - listSSMParameters] [${runner.awsRegion}] ` +
-            `Failed to list parameters or check if available: ${e}`,
-        );
-        doDeleteSSMParameter(paramName, metrics, runner.awsRegion);
-      }
-    }
   } catch (e) {
     console.error(`[${runner.awsRegion}] [terminateRunner]: ${e}`);
     throw e;
@@ -393,6 +395,18 @@ async function addSSMParameterRunnerConfig(
                 Name: parameterName,
                 Value: runnerConfig,
                 Type: 'SecureString',
+                // NOTE: This does need to be an stringified JSON array of objects, check docs at:
+                // https://docs.aws.amazon.com/systems-manager/latest/userguide/example_ssm_PutParameter_section.html
+                Policies: JSON.stringify([
+                  {
+                    Type: 'Expiration',
+                    Version: '1.0',
+                    Attributes: {
+                      //  Expire after 30 minutes from present time
+                      Timestamp: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
+                    },
+                  },
+                ]),
               })
               .promise();
             return parameterName;
@@ -517,13 +531,11 @@ export async function tryReuseRunner(
         continue;
       }
 
-      if (finishedAt.add(Config.Instance.minimumRunningTimeInMinutes - 5, 'minutes') < moment(new Date()).utc()) {
+      if (finishedAt.add(Config.Instance.minimumRunningTimeInMinutes, 'minutes') < moment(new Date()).utc()) {
         console.debug(
-          `[tryReuseRunner]: Runner ${
-            runner.instanceId
-          } is already over minimumRunningTimeInMinutes time to be reused ${
-            Config.Instance.minimumRunningTimeInMinutes
-          } ${runner.ephemeralRunnerFinished} ${moment(new Date()).utc().toDate().getTime() / 1000}`,
+          `[tryReuseRunner]: Runner ${runner.instanceId} has been idle for over minimumRunningTimeInMinutes time of ` +
+            `${Config.Instance.minimumRunningTimeInMinutes} mins, so it's likely to be reclaimed soon and should ` +
+            `not be reused. It's been idle since ${finishedAt.format()}`,
         );
         continue;
       }
@@ -552,7 +564,7 @@ export async function tryReuseRunner(
           const ec2 = ec2M.get(runner.awsRegion) as EC2;
 
           // should come before removing other tags, this is useful so
-          // there is always a tag present for scaeDown to know that
+          // there is always a tag present for scaleDown to know that
           // it can/will be reused and avoid deleting it
           await expBackOff(() => {
             return metrics.trackRequestRegion(
@@ -667,7 +679,7 @@ export async function tryReuseRunner(
     );
   }
 
-  throw new Error('No runners available');
+  throw new NoRunnersAvailable();
 }
 
 export async function createRunner(runnerParameters: RunnerInputParameters, metrics: Metrics): Promise<string> {

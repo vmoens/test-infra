@@ -1,20 +1,20 @@
-import CheckBoxSelector from "components/CheckBoxSelector";
-import CopyLink from "components/CopyLink";
+import CheckBoxSelector from "components/common/CheckBoxSelector";
+import CopyLink from "components/common/CopyLink";
+import LoadingPage from "components/common/LoadingPage";
+import PageSelector from "components/common/PageSelector";
+import { LocalTimeHuman } from "components/common/TimeUtils";
+import TooltipTarget from "components/common/tooltipTarget/TooltipTarget";
+import styles from "components/hud.module.css";
 import {
   GroupHudTableColumns,
   GroupHudTableHeader,
   passesGroupFilter,
-} from "components/GroupHudTableHeaders";
-import HudGroupedCell from "components/GroupJobConclusion";
-import styles from "components/hud.module.css";
-import JobConclusion from "components/JobConclusion";
-import JobFilterInput from "components/JobFilterInput";
-import JobTooltip from "components/JobTooltip";
-import LoadingPage from "components/LoadingPage";
-import PageSelector from "components/PageSelector";
+} from "components/hud/GroupHudTableHeaders";
+import HudGroupedCell from "components/job/GroupJobConclusion";
+import JobConclusion from "components/job/JobConclusion";
+import JobFilterInput from "components/job/JobFilterInput";
+import JobTooltip from "components/job/JobTooltip";
 import SettingsPanel from "components/SettingsPanel";
-import { LocalTimeHuman } from "components/TimeUtils";
-import TooltipTarget from "components/TooltipTarget";
 import { fetcher } from "lib/GeneralUtils";
 import {
   getGroupingData,
@@ -28,7 +28,7 @@ import {
   isUnstableJob,
 } from "lib/jobUtils";
 import { ParamSelector } from "lib/ParamSelector";
-import { track } from "lib/track";
+import { trackRouteEvent } from "lib/tracking/track";
 import {
   formatHudUrlForRoute,
   Highlight,
@@ -283,93 +283,68 @@ function HudTableBody({
   );
 }
 
-function GroupFilterableHudTable({
-  params,
-  children,
-  groupNames,
-  useGrouping,
-  setUseGrouping,
-  hideUnstable,
-  setHideUnstable,
-  hideGreenColumns,
-  setHideGreenColumns,
-}: {
-  params: HudParams;
-  children: React.ReactNode;
-  groupNames: string[];
-  useGrouping: boolean;
-  setUseGrouping: any;
-  hideUnstable: boolean;
-  setHideUnstable: any;
-  hideGreenColumns: boolean;
-  setHideGreenColumns: any;
-}) {
+function FiltersAndSettings({}: {}) {
+  const router = useRouter();
+  const params = packHudParams(router.query);
   const { jobFilter, handleSubmit } = useTableFilter(params);
-  const headerNames = groupNames;
   const [mergeEphemeralLF, setMergeEphemeralLF] = useContext(MergeLFContext);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [hideUnstable, setHideUnstable] = usePreference("hideUnstable");
+  const [hideGreenColumns, setHideGreenColumns] =
+    useHideGreenColumnsPreference();
+  const [useGrouping, setUseGrouping] = useGroupingPreference(
+    params.nameFilter
+  );
 
   return (
-    <>
-      <div style={{ position: "relative", clear: "both" }}>
-        <div className={styles.hudControlsRow}>
-          <JobFilterInput
-            currentFilter={jobFilter}
-            handleSubmit={handleSubmit}
-          />
-          <SettingsPanel
-            settingGroups={{
-              // You need to specify both checkBoxName and key for each setting.
-              // `checkbox name` is used by CheckBoxSelector while `key` is
-              // used to uniquely identify the component in the settings panel.
-              // As far as I can CheckBoxSelector cannot read or write `key` but
-              // React requires us to set key since it's a list element, so we
-              // end up with some unfortunate duplication.
-              "View Options": [
-                <CheckBoxSelector
-                  value={useGrouping}
-                  setValue={(value) => setUseGrouping(value)}
-                  checkBoxName="groupView"
-                  key="groupView"
-                  labelText={"Use grouped view"}
-                />,
-                <MonsterFailuresCheckbox key="monsterFailures" />,
-              ],
-              "Filter Options": [
-                <CheckBoxSelector
-                  value={hideUnstable}
-                  setValue={(value) => setHideUnstable(value)}
-                  checkBoxName="hideUnstable"
-                  key="hideUnstable"
-                  labelText={"Hide unstable jobs"}
-                />,
-                <CheckBoxSelector
-                  value={hideGreenColumns}
-                  setValue={(value) => setHideGreenColumns(value)}
-                  checkBoxName="hideGreenColumns"
-                  key="hideGreenColumns"
-                  labelText={"Hide green columns"}
-                />,
-                <CheckBoxSelector
-                  value={mergeEphemeralLF}
-                  setValue={setMergeEphemeralLF}
-                  checkBoxName="mergeEphemeralLF"
-                  key="mergeEphemeralLF"
-                  labelText={"Condense LF, ephemeral jobs"}
-                />,
-              ],
-            }}
-            isOpen={settingsPanelOpen}
-            onToggle={() => setSettingsPanelOpen(!settingsPanelOpen)}
-          />
-        </div>
-        <table className={styles.hudTable} style={{ overflow: "auto" }}>
-          <GroupHudTableColumns names={headerNames} />
-          <GroupHudTableHeader names={headerNames} />
-          {children}
-        </table>
-      </div>
-    </>
+    <div className={styles.hudControlsRow}>
+      <JobFilterInput currentFilter={jobFilter} handleSubmit={handleSubmit} />
+      <SettingsPanel
+        settingGroups={{
+          // You need to specify both checkBoxName and key for each setting.
+          // `checkbox name` is used by CheckBoxSelector while `key` is
+          // used to uniquely identify the component in the settings panel.
+          // As far as I can CheckBoxSelector cannot read or write `key` but
+          // React requires us to set key since it's a list element, so we
+          // end up with some unfortunate duplication.
+          "View Options": [
+            <CheckBoxSelector
+              value={useGrouping}
+              setValue={(value) => setUseGrouping(value)}
+              checkBoxName="groupView"
+              key="groupView"
+              labelText={"Use grouped view"}
+            />,
+            <MonsterFailuresCheckbox key="monsterFailures" />,
+          ],
+          "Filter Options": [
+            <CheckBoxSelector
+              value={hideUnstable}
+              setValue={(value) => setHideUnstable(value)}
+              checkBoxName="hideUnstable"
+              key="hideUnstable"
+              labelText={"Hide unstable jobs"}
+            />,
+            <CheckBoxSelector
+              value={hideGreenColumns}
+              setValue={(value) => setHideGreenColumns(value)}
+              checkBoxName="hideGreenColumns"
+              key="hideGreenColumns"
+              labelText={"Hide green columns"}
+            />,
+            <CheckBoxSelector
+              value={mergeEphemeralLF}
+              setValue={setMergeEphemeralLF}
+              checkBoxName="mergeEphemeralLF"
+              key="mergeEphemeralLF"
+              labelText={"Condense LF, ephemeral jobs"}
+            />,
+          ],
+        }}
+        isOpen={settingsPanelOpen}
+        onToggle={() => setSettingsPanelOpen(!settingsPanelOpen)}
+      />
+    </div>
   );
 }
 
@@ -413,18 +388,6 @@ export function MonsterFailuresCheckbox() {
       checkBoxName="monsterFailures"
       labelText={"Monsterize failures"}
     />
-  );
-}
-
-function HudTable({ params }: { params: HudParams }) {
-  const data = useHudData(params);
-  if (data === undefined) {
-    return <LoadingPage />;
-  }
-  return (
-    <>
-      <GroupedHudTable params={params} data={data} />
-    </>
   );
 }
 
@@ -525,7 +488,10 @@ export default function Hud() {
                     style={{ marginLeft: "10px" }}
                   />
                 </div>
-                <HudTable params={params} />
+                <div style={{ position: "relative", clear: "both" }}>
+                  <FiltersAndSettings />
+                  <GroupedHudTable params={params} />
+                </div>
                 <PageSelector params={params} baseUrl="hud" />
                 <br />
                 <div>
@@ -576,13 +542,9 @@ function CopyPermanentLink({
   return <CopyLink textToCopy={url} compressed={false} style={style} />;
 }
 
-function GroupedHudTable({
-  params,
-  data,
-}: {
-  params: HudParams;
-  data: RowData[];
-}) {
+function GroupedHudTable({ params }: { params: HudParams }) {
+  const router = useRouter();
+  const data = useHudData(params);
   const { data: unstableIssuesData } = useSWR<IssueLabelApiResponse>(
     `/api/issue/unstable`,
     fetcher,
@@ -592,19 +554,16 @@ function GroupedHudTable({
     }
   );
   const jobNames = new Set(
-    data.flatMap((row) => Array.from(row.nameToJobs.keys()))
+    data?.flatMap((row) => Array.from(row.nameToJobs.keys()))
   );
 
-  const [hideUnstable, setHideUnstable] = usePreference("hideUnstable");
-  const [hideGreenColumns, setHideGreenColumns] =
-    useHideGreenColumnsPreference();
-  const [useGrouping, setUseGrouping] = useGroupingPreference(
-    params.nameFilter
-  );
+  const [hideUnstable] = usePreference("hideUnstable");
+  const [hideGreenColumns] = useHideGreenColumnsPreference();
+  const [useGrouping] = useGroupingPreference(params.nameFilter);
 
   const { shaGrid, groupNameMapping, jobsWithFailures, groupsWithFailures } =
     getGroupingData(
-      data,
+      data ?? [],
       jobNames,
       (!useGrouping && hideUnstable) || (useGrouping && !hideUnstable),
       unstableIssuesData ?? []
@@ -614,11 +573,10 @@ function GroupedHudTable({
 
   const { jobFilter } = useTableFilter(params);
 
-  const router = useRouter();
   useEffect(() => {
     // Only run on component mount, this assumes that the user's preference is
     // the value in local storage
-    track(router, "groupingPreference", { useGrouping: useGrouping });
+    trackRouteEvent(router, "groupingPreference", { useGrouping: useGrouping });
   }, [router, useGrouping]);
 
   const groupNames = Array.from(groupNameMapping.keys());
@@ -662,7 +620,14 @@ function GroupedHudTable({
 
   names = names.filter((name) => {
     // Filter by job filter text first
-    if (!passesGroupFilter(jobFilter, name, groupNameMapping)) {
+    if (
+      !passesGroupFilter(
+        jobFilter,
+        name,
+        groupNameMapping,
+        params.useRegexFilter || false
+      )
+    ) {
       return false;
     }
 
@@ -681,26 +646,23 @@ function GroupedHudTable({
     return true;
   });
 
+  if (data === undefined) {
+    return <LoadingPage />;
+  }
+
   return (
     <GroupingContext.Provider
       value={{ groupNameMapping, expandedGroups, setExpandedGroups }}
     >
-      <GroupFilterableHudTable
-        params={params}
-        groupNames={names}
-        useGrouping={useGrouping}
-        setUseGrouping={setUseGrouping}
-        hideUnstable={hideUnstable}
-        setHideUnstable={setHideUnstable}
-        hideGreenColumns={hideGreenColumns}
-        setHideGreenColumns={setHideGreenColumns}
-      >
+      <table className={styles.hudTable} style={{ overflow: "auto" }}>
+        <GroupHudTableColumns names={names} />
+        <GroupHudTableHeader names={names} />
         <HudTableBody
           shaGrid={shaGrid}
           names={names}
           unstableIssues={unstableIssuesData ?? []}
         />
-      </GroupFilterableHudTable>
+      </table>
     </GroupingContext.Provider>
   );
 }

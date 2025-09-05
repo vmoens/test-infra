@@ -1,7 +1,7 @@
 import {
   Autocomplete,
   FormControl,
-  Grid2,
+  Grid,
   InputLabel,
   MenuItem,
   Select,
@@ -13,9 +13,9 @@ import {
 } from "@mui/material";
 import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import CopyLink from "components/CopyLink";
+import CopyLink from "components/common/CopyLink";
+import { durationDisplay } from "components/common/TimeUtils";
 import TimeSeriesPanel from "components/metrics/panels/TimeSeriesPanel";
-import { durationDisplay } from "components/TimeUtils";
 import dayjs from "dayjs";
 import { fetcher } from "lib/GeneralUtils";
 import { useRouter } from "next/router";
@@ -86,8 +86,8 @@ export function TimeRangePicker({
   setStartTime: any;
   stopTime: dayjs.Dayjs;
   setStopTime: any;
-  timeRange: any;
-  setTimeRange: any;
+  timeRange: number;
+  setTimeRange: (_: number) => any;
 }) {
   function updateTimeRange() {
     if (timeRange === -1) {
@@ -264,6 +264,9 @@ export default function Page() {
   useEffect(() => {
     if (!router.isReady) return;
 
+    // Only update URL if we're still on the SLI page
+    if (router.pathname !== "/sli") return;
+
     const params = new URLSearchParams();
 
     if (timeRange !== -1) {
@@ -286,10 +289,14 @@ export default function Page() {
       params.set("ttsPercentile", initialTtsPercentile);
     }
 
-    router.push({
-      pathname: router.pathname,
-      query: params.toString(),
-    });
+    router.push(
+      {
+        pathname: router.pathname,
+        query: params.toString(),
+      },
+      undefined,
+      { shallow: true }
+    );
   }, [
     initialTtsPercentile,
     initialWorkerTypes,
@@ -349,7 +356,7 @@ export default function Page() {
         </Stack>
       )}
       {routerReady && (
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TimeSeriesPanel
             title={"GHA Worker Queue Time"}
             queryName={"queue_times_historical_pct"}
@@ -366,7 +373,7 @@ export default function Page() {
             yAxisFieldName={`queue_s_${ttsPercentile}`}
             yAxisRenderer={durationDisplay}
           />
-        </Grid2>
+        </Grid>
       )}
     </div>
   );

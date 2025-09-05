@@ -1,4 +1,4 @@
-import { Grid2, Skeleton } from "@mui/material";
+import { Grid, Skeleton } from "@mui/material";
 import { COMMIT_TO_WORKFLOW_ID } from "components/benchmark/BranchAndCommitPicker";
 import { TIME_FIELD_NAME } from "components/benchmark/common";
 import { SUITES } from "components/benchmark/compilers/SuitePicker";
@@ -105,12 +105,7 @@ function SuiteGraphPanel({
     return <Skeleton variant={"rectangular"} height={"100%"} />;
   }
 
-  // TODO (huydhn): Remove this once TorchInductor dashboard is migrated to the
-  // new database schema
-  data =
-    queryName === "torchao_query"
-      ? convertToCompilerPerformanceData(data)
-      : data;
+  data = convertToCompilerPerformanceData(data);
 
   // Clamp to the nearest granularity (e.g. nearest hour) so that the times will
   // align with the data we get from the database
@@ -240,6 +235,7 @@ function SuiteGraphPanel({
       (id <= lWorkflowId && id >= rWorkflowId)
     );
   });
+
   const peakMemorySeries = seriesWithInterpolatedTimes(
     peakMemory,
     startTime,
@@ -252,8 +248,8 @@ function SuiteGraphPanel({
   );
 
   return (
-    <Grid2 container spacing={2}>
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={passrate}
           series={passrateSeries}
@@ -277,9 +273,9 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
+      </Grid>
 
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={passrate}
           series={totalModelCountSeries}
@@ -302,9 +298,9 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
+      </Grid>
 
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={geomean}
           series={geomeanSeries}
@@ -328,9 +324,9 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
+      </Grid>
 
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={compTime}
           series={compTimeSeries}
@@ -354,9 +350,9 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
+      </Grid>
 
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={memory}
           series={memorySeries}
@@ -379,9 +375,9 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
+      </Grid>
 
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={peakMemory}
           series={peakMemorySeries}
@@ -405,9 +401,9 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
+      </Grid>
 
-      <Grid2 size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
+      <Grid size={{ xs: 12, lg: 6 }} height={GRAPH_ROW_HEIGHT}>
         <TimeSeriesPanelWithData
           data={executionTime}
           series={executionTimeSeries}
@@ -431,7 +427,7 @@ function SuiteGraphPanel({
           }}
           legendPadding={310}
         />
-      </Grid2>
-    </Grid2>
+      </Grid>
+    </Grid>
   );
 }

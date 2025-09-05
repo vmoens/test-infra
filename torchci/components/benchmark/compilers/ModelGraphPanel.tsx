@@ -1,4 +1,4 @@
-import { Grid2, Skeleton } from "@mui/material";
+import { Grid, Skeleton } from "@mui/material";
 import {
   COMMIT_TO_WORKFLOW_ID,
   WORKFLOW_ID_TO_COMMIT,
@@ -10,10 +10,7 @@ import {
   TimeSeriesPanelWithData,
 } from "components/metrics/panels/TimeSeriesPanel";
 import dayjs from "dayjs";
-import {
-  augmentData,
-  convertToCompilerPerformanceData,
-} from "lib/benchmark/compilerUtils";
+import { convertToCompilerPerformanceData } from "lib/benchmark/compilerUtils";
 import { fetcher } from "lib/GeneralUtils";
 import { CompilerPerformanceData } from "lib/types";
 import useSWR from "swr";
@@ -52,13 +49,7 @@ export function GraphPanel({
   let { data, error } = useSWR(url, fetcher, {
     refreshInterval: 60 * 60 * 1000, // refresh every hour
   });
-  // TODO (huydhn): Remove this once TorchInductor dashboard is migrated to the
-  // new database schema
-  data =
-    queryName === "torchao_query"
-      ? convertToCompilerPerformanceData(data)
-      : data;
-  data = augmentData(data);
+  data = convertToCompilerPerformanceData(data);
 
   if (data === undefined || data.length === 0) {
     return <Skeleton variant={"rectangular"} height={"100%"} />;
@@ -155,8 +146,8 @@ export function GraphPanel({
     <>
       <div>
         <h2>Details for {model}</h2>
-        <Grid2 container spacing={2}>
-          <Grid2 size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
             <TimeSeriesPanelWithData
               data={chartData}
               series={geomeanSeries}
@@ -178,9 +169,9 @@ export function GraphPanel({
                 },
               }}
             />
-          </Grid2>
+          </Grid>
 
-          <Grid2 size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
+          <Grid size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
             <TimeSeriesPanelWithData
               data={chartData}
               series={compTimeSeries}
@@ -203,9 +194,9 @@ export function GraphPanel({
                 },
               }}
             />
-          </Grid2>
+          </Grid>
 
-          <Grid2 size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
+          <Grid size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
             <TimeSeriesPanelWithData
               data={chartData}
               series={memorySeries}
@@ -227,9 +218,9 @@ export function GraphPanel({
                 },
               }}
             />
-          </Grid2>
+          </Grid>
 
-          <Grid2 size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
+          <Grid size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
             <TimeSeriesPanelWithData
               data={chartData}
               series={absTimeSeries}
@@ -252,9 +243,9 @@ export function GraphPanel({
                 },
               }}
             />
-          </Grid2>
+          </Grid>
 
-          <Grid2 size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
+          <Grid size={{ xs: 12, lg: 4 }} height={GRAPH_ROW_HEIGHT}>
             <TimeSeriesPanelWithData
               data={chartData}
               series={peakMemoryUsageTimeSeries}
@@ -277,8 +268,8 @@ export function GraphPanel({
                 },
               }}
             />
-          </Grid2>
-        </Grid2>
+          </Grid>
+        </Grid>
       </div>
       <div>
         <table>

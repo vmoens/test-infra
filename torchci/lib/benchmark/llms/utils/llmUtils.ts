@@ -45,16 +45,46 @@ export function useBenchmark(
  * @param props LLMsBenchmarkProps
  */
 export function getLLMsBenchmarkPropsQueryParameter(props: LLMsBenchmarkProps) {
+  let dtypes: any[] = [];
+  if (props.dtypeName === DEFAULT_DTYPE_NAME) {
+    dtypes = [];
+  } else if (props.repoName == "pytorch/ao") {
+    if (props.backendName.startsWith("micro-benchmark")) {
+      dtypes = [props.dtypeName];
+    } else {
+      dtypes = [props.dtypeName, TORCHAO_BASELINE];
+    }
+  } else {
+    dtypes = [props.dtypeName];
+  }
+
+  const deviceName =
+    props.deviceName === DEFAULT_DEVICE_NAME ? "" : props.deviceName;
+  const archName = props.archName === DEFAULT_ARCH_NAME ? "" : props.archName;
+
+  let device = "";
+  let arch = "";
+  if (archName === "") {
+    // All the dashboards currently put device and arch into the same field in
+    // device (arch) format, i.e. cuda (NVIDIA B200). So, we need to extract
+    // the arch name here to use it in the query
+    const deviceArchRegex = new RegExp("^(?<device>.+)\\s+\\((?<arch>.+)\\)$");
+    const m = deviceName.match(deviceArchRegex);
+
+    device =
+      m !== null && m.groups !== undefined ? m.groups.device : deviceName;
+    arch = m !== null && m.groups !== undefined ? m.groups.arch : archName;
+  } else {
+    // If both device and arch are set, we just need to use them as they are
+    device = deviceName;
+    arch = archName;
+  }
+
   const queryParams = {
-    arch: props.archName === DEFAULT_ARCH_NAME ? "" : props.archName,
-    device: props.deviceName === DEFAULT_DEVICE_NAME ? "" : props.deviceName,
+    arch: arch,
+    device: device,
     mode: props.modeName === DEFAULT_MODE_NAME ? "" : props.modeName,
-    dtypes:
-      props.dtypeName === DEFAULT_DTYPE_NAME
-        ? []
-        : props.repoName !== "pytorch/ao" // TODO(elainewy): add config to handle repos-specific logics
-        ? [props.dtypeName]
-        : [props.dtypeName, TORCHAO_BASELINE],
+    dtypes: dtypes,
     excludedMetrics: EXCLUDED_METRICS,
     benchmarks: props.benchmarkName
       ? [props.benchmarkName]
@@ -282,40 +312,18 @@ const toRowData = (
       arch: arch,
     };
 
-    if (repoName === "vllm-project/vllm") {
+    if (repoName === "vllm-project/vllm" || repoName === "sgl-project/sglang") {
       // These fields are only available on vLLM benchmark
       const extraInfo = JSON.parse(extra);
-      // TODO (huydhn): Fix the invalid JSON on vLLM side
-      if (
-        metric.includes("itl") ||
-        metric.includes("tpot") ||
-        metric.includes("ttft")
-      ) {
-        extraInfo["request_rate"] =
-          extraInfo["request_rate"] !== "" ? extraInfo["request_rate"] : "Inf";
-      }
-      // TODO (huydhn): Fix the passing of tensor_parallel_size to the benchmark
-      // script on vLLM side
-      if (model.includes("8B")) {
-        extraInfo["tensor_parallel_size"] =
-          extraInfo["tensor_parallel_size"] !== ""
-            ? extraInfo["tensor_parallel_size"]
-            : 1;
-      } else if (model.includes("70B")) {
-        extraInfo["tensor_parallel_size"] =
-          extraInfo["tensor_parallel_size"] !== ""
-            ? extraInfo["tensor_parallel_size"]
-            : 4;
-      } else if (model.includes("8x7B")) {
-        extraInfo["tensor_parallel_size"] =
-          extraInfo["tensor_parallel_size"] !== ""
-            ? extraInfo["tensor_parallel_size"]
-            : 2;
-      }
-
       row["extra"] = extraInfo;
       row["tensor_parallel_size"] = extraInfo["tensor_parallel_size"];
       row["request_rate"] = extraInfo["request_rate"];
+      row["input_len"] = extraInfo["random_input_len"]
+        ? extraInfo["random_input_len"]
+        : extraInfo["input_len"];
+      row["output_len"] = extraInfo["random_output_len"]
+        ? extraInfo["random_input_len"]
+        : extraInfo["output_len"];
     }
 
     if (

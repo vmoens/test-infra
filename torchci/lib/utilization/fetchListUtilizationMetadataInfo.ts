@@ -8,8 +8,9 @@ import {
   UtilizationMetadataInfo,
 } from "./types";
 const LIST_UTIL_METADATA_INFO_QUERY_FOLDER_NAME =
-  "oss_ci_list_util_metadata_info";
-const LIST_UTIL_METADATA_WITH_STATS_QUERY = "oss_ci_list_util_stats";
+  "oss_ci_util/oss_ci_list_util_metadata_info";
+const LIST_UTIL_METADATA_WITH_STATS_QUERY =
+  "oss_ci_util/oss_ci_list_util_stats";
 
 export default async function fetchListUtilizationMetadataInfo(
   params: ListUtilizationMetadataInfoParams
@@ -94,9 +95,24 @@ function toUtilizationStats(metadata: any) {
     gpu_max: metadata.gpu_count ? metadata.gpu_max : undefined,
     gpu_avg: metadata.gpu_count ? metadata.gpu_avg : undefined,
     gpu_p90: metadata.gpu_count ? metadata.gpu_p90 : undefined,
-    gpu_memory_max: metadata.gpu_count ? metadata.gpu_mem_max : undefined,
-    gpu_memory_avg: metadata.gpu_count ? metadata.gpu_mem_avg : undefined,
-    gpu_memmory_p90: metadata.gpu_count ? metadata.gpu_mem_p90 : undefined,
+    gpu_memory_bandwidth_max: metadata.gpu_count
+      ? metadata.gpu_mem_bandwidth_max
+      : undefined,
+    gpu_memory_bandwidth_avg: metadata.gpu_count
+      ? metadata.gpu_mem_bandwidth_avg
+      : undefined,
+    gpu_memory_bandwidth_p90: metadata.gpu_count
+      ? metadata.gpu_mem_bandwidth_p90
+      : undefined,
+    gpu_allocated_memory_max: metadata.gpu_count
+      ? metadata.gpu_allocated_mem_max
+      : undefined,
+    gpu_allocated_memory_avg: metadata.gpu_count
+      ? metadata.gpu_allocated_mem_avg
+      : undefined,
+    gpu_allocated_memory_p90: metadata.gpu_count
+      ? metadata.gpu_allocated_mem_p90
+      : undefined,
     has_gpu: metadata.gpu_count ? metadata.gpu_count > 0 : false,
   };
   return stats;

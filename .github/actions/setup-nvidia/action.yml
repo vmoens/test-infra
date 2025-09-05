@@ -7,7 +7,7 @@ inputs:
     description: which driver version to install
     required: false
     type: string
-    default: "570.133.07"   # https://www.nvidia.com/en-us/drivers/details/242273
+    default: "570.133.07" # https://www.nvidia.com/en-us/drivers/details/242273
 
 runs:
   using: composite
@@ -40,7 +40,11 @@ runs:
                   fi
 
                   sudo yum-config-manager --add-repo "${YUM_REPO_URL}"
-                  sudo yum install -y nvidia-docker2 nvidia-container-toolkit-1.16.2
+                  sudo yum install -y \
+                    nvidia-container-toolkit-1.17.8 \
+                    libnvidia-container-tools-1.17.8 \
+                    libnvidia-container1-1.17.8 \
+                    nvidia-container-toolkit-base-1.17.8
                   sudo systemctl restart docker
               )
           }
@@ -51,7 +55,7 @@ runs:
                   # Install nvidia-driver package if not installed
                   status="$(dpkg-query -W --showformat='${db:Status-Status}' nvidia-docker2 2>&1)"
                   if [ ! $? = 0 ] || [ ! "$status" = installed ]; then
-                    sudo apt-get install -y nvidia-docker2 nvidia-container-toolkit-1.16.2
+                    sudo apt-get install -y nvidia-container-toolkit-1.17.8
                     sudo systemctl restart docker
                   fi
               )
@@ -255,3 +259,6 @@ runs:
           sudo nvidia-persistenced || true
           # This should show persistence mode ON
           nvidia-smi
+
+          # check if the container-toolkit is correctly installed and CUDA is available inside a container
+          docker run --rm -t --gpus=all public.ecr.aws/docker/library/python:3.13 nvidia-smi

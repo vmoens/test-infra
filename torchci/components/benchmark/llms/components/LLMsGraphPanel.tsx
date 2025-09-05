@@ -1,7 +1,8 @@
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import {
   Box,
-  Grid2,
+  Button,
+  Grid,
   IconButton,
   Link,
   Paper,
@@ -21,6 +22,7 @@ import {
   WORKFLOW_ID_TO_COMMIT,
 } from "components/benchmark/BranchAndCommitPicker";
 import { TIME_FIELD_NAME } from "components/benchmark/common";
+import { arrayToCSV, downloadCSV, generateCSVFilename } from "lib/csvUtils";
 
 import {
   Granularity,
@@ -167,32 +169,28 @@ export default function LLMsGraphPanel({
               const device = record.device;
               const metric = record.metric;
 
-              if (repoName === "vllm-project/vllm") {
-                let requestRate = record.extra!["request_rate"];
-                // TODO (huydhn): Fix the invalid JSON on vLLM side
-                if (
-                  metric.includes("itl") ||
-                  metric.includes("tpot") ||
-                  metric.includes("ttft")
-                ) {
-                  requestRate = requestRate !== "" ? requestRate : "Inf";
-                }
+              if (
+                repoName === "vllm-project/vllm" ||
+                repoName === "sgl-project/sglang"
+              ) {
+                const requestRate = record.extra!["request_rate"];
+                const tensorParallel = record.extra!["tensor_parallel_size"];
+                const inputLen = record.extra!["random_input_len"]
+                  ? record.extra!["random_input_len"]
+                  : record.extra!["input_len"];
+                const outputLen = record.extra!["random_output_len"]
+                  ? record.extra!["random_output_len"]
+                  : record.extra!["output_len"];
 
-                let tensorParallel = record.extra!["tensor_parallel_size"];
-                // TODO (huydhn): Fix the passing of tensor_parallel_size to the benchmark
-                // script on vLLM side
-                if (model.includes("8B")) {
-                  tensorParallel = tensorParallel !== "" ? tensorParallel : "1";
-                } else if (model.includes("70B")) {
-                  tensorParallel = tensorParallel !== "" ? tensorParallel : "4";
-                } else if (model.includes("8x7B")) {
-                  tensorParallel = tensorParallel !== "" ? tensorParallel : "2";
+                record.display = `${model} / tp${tensorParallel}`;
+                if (requestRate) {
+                  record.display = `${record.display} / qps_${requestRate}`;
                 }
-
-                if (requestRate !== "") {
-                  record.display = `${model} / tp${tensorParallel} / qps_${requestRate}`;
-                } else {
-                  record.display = `${model} / tp${tensorParallel}`;
+                if (inputLen) {
+                  record.display = `${record.display} / in_${inputLen}`;
+                }
+                if (outputLen) {
+                  record.display = `${record.display} / out_${outputLen}`;
                 }
               } else if (
                 repoName === "pytorch/pytorch" &&
@@ -226,18 +224,21 @@ export default function LLMsGraphPanel({
     );
   });
 
-  const availableMetric =
-    metricNames.find((metric) => chartData[metric].length !== 0) ??
-    metricNames[0];
+  // find the metric with the longest data array, it is used as baseline for rows and mapping in the table.
+  const maxLengthMetric = metricNames.reduce(
+    (longest, metric) =>
+      chartData[metric].length > chartData[longest].length ? metric : longest,
+    metricNames[0]
+  );
 
   return (
     <>
       <div>
-        <Grid2 container spacing={2}>
+        <Grid container spacing={2}>
           {metricNames
             .filter((metric) => chartData[metric].length !== 0)
             .map((metric: string) => (
-              <Grid2
+              <Grid
                 size={{ xs: 12, lg: modelName === DEFAULT_MODEL_NAME ? 12 : 6 }}
                 height={GRAPH_ROW_HEIGHT}
                 key={metric}
@@ -266,9 +267,9 @@ export default function LLMsGraphPanel({
                   }}
                   legendPadding={320}
                 />
-              </Grid2>
+              </Grid>
             ))}
-        </Grid2>
+        </Grid>
       </div>
       {modelName !== DEFAULT_MODEL_NAME && (
         <Box mt={4} px={2}>
@@ -284,7 +285,7 @@ export default function LLMsGraphPanel({
             <MetricTable
               chartData={chartData}
               metricNames={metricNames}
-              availableMetric={availableMetric}
+              availableMetric={maxLengthMetric}
               METRIC_DISPLAY_SHORT_HEADERS={METRIC_DISPLAY_SHORT_HEADERS}
               WORKFLOW_ID_TO_COMMIT={WORKFLOW_ID_TO_COMMIT}
               repo={repoName}
@@ -342,73 +343,131 @@ const MetricTable = ({
 }) => {
   const repoUrl = "https://github.com/" + repo;
 
+  const exportToCSV = () => {
+    const baseData = chartData[availableMetric] ?? [];
+    const rows = baseData.map((entry, index) => {
+      const commit = WORKFLOW_ID_TO_COMMIT[entry.workflow_id];
+      const row: Record<string, any> = {
+        Date: entry?.metadata_info.timestamp,
+        Commit: commit,
+        Workflow: `${entry.workflow_id}/${entry.job_id}`,
+      };
+
+      metricNames.forEach((metric) => {
+        if (chartData[metric]?.length) {
+          const label = METRIC_DISPLAY_SHORT_HEADERS[metric] ?? metric;
+          // Find the matching record for this metric based on workflow_id and other identifying properties
+          const matchingRecord = chartData[metric].find(
+            (record: any) =>
+              record.workflow_id === entry.workflow_id &&
+              record.job_id === entry.job_id &&
+              record.model === entry.model &&
+              record.device === entry.device &&
+              record.dtype === entry.dtype
+          );
+          row[label] =
+            chartData[metric][index]?.actual ?? matchingRecord?.actual ?? "";
+        }
+      });
+      return row;
+    });
+
+    const csvData = arrayToCSV(rows);
+    const filename = generateCSVFilename("benchmark", "metrics", [
+      repo.replace("/", "_"),
+    ]);
+    downloadCSV(csvData, filename);
+  };
   return (
-    <TableContainer
-      component={Paper}
-      sx={{ maxHeight: 440, margin: "10px 0", tableLayout: "auto" }}
-    >
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <MetricCell tooltipText="the date when data inserted in db">
-              Date
-            </MetricCell>
-            <MetricCell tooltipText="the latest commit associted with the git job">
-              Commit
-            </MetricCell>
-            <MetricCell tooltipText="the workflow job that generates the value">
-              Workflow Info
-            </MetricCell>
-            {metricNames.map((metric: string) => (
-              <TableCell key={metric} sx={{ py: 0.5 }}>
-                {chartData[metric]?.length
-                  ? METRIC_DISPLAY_SHORT_HEADERS[metric] ?? metric
-                  : ""}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {chartData[availableMetric].map((entry: any, index: number) => {
-            const commit = WORKFLOW_ID_TO_COMMIT[entry.workflow_id];
-            return (
-              <TableRow key={index}>
-                <TableCell>
-                  <span>{entry?.metadata_info.timestamp} </span>
+    <>
+      <Button
+        variant="outlined"
+        size="small"
+        sx={{ mb: 1 }}
+        onClick={exportToCSV}
+      >
+        Download as CSV
+      </Button>
+      <TableContainer
+        component={Paper}
+        sx={{ maxHeight: 440, margin: "10px 0", tableLayout: "auto" }}
+      >
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <MetricCell tooltipText="the date when data inserted in db">
+                Date
+              </MetricCell>
+              <MetricCell tooltipText="the latest commit associted with the git job">
+                Commit
+              </MetricCell>
+              <MetricCell tooltipText="the workflow job that generates the value">
+                Workflow Info
+              </MetricCell>
+              {metricNames.map((metric: string) => (
+                <TableCell key={metric} sx={{ py: 0.5 }}>
+                  {chartData[metric]?.length
+                    ? METRIC_DISPLAY_SHORT_HEADERS[metric] ?? metric
+                    : ""}
                 </TableCell>
-                <TableCell sx={{ py: 0.25 }}>
-                  <code>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {chartData[availableMetric].map((entry: any, index: number) => {
+              const commit = WORKFLOW_ID_TO_COMMIT[entry.workflow_id];
+              return (
+                <TableRow key={index}>
+                  <TableCell>
+                    <span>{entry?.metadata_info.timestamp} </span>
+                  </TableCell>
+                  <TableCell sx={{ py: 0.25 }}>
+                    <code>
+                      <Link
+                        component="button"
+                        underline="hover"
+                        onClick={() => navigator.clipboard.writeText(commit)}
+                        sx={{ cursor: "pointer", fontSize: "0.75rem" }}
+                      >
+                        {commit}
+                      </Link>
+                    </code>
+                  </TableCell>
+                  <TableCell sx={{ py: 0.25 }}>
                     <Link
-                      component="button"
-                      underline="hover"
-                      onClick={() => navigator.clipboard.writeText(commit)}
-                      sx={{ cursor: "pointer", fontSize: "0.75rem" }}
+                      href={`${repoUrl}/actions/runs/${entry.workflow_id}/job/${entry.job_id}`}
+                      target="_blank"
                     >
-                      {commit}
+                      {entry.workflow_id}/{entry.job_id}
                     </Link>
-                  </code>
-                </TableCell>
-                <TableCell sx={{ py: 0.25 }}>
-                  <Link
-                    href={`${repoUrl}/actions/runs/${entry.workflow_id}/job/${entry.job_id}`}
-                    target="_blank"
-                  >
-                    {entry.workflow_id}/{entry.job_id}
-                  </Link>
-                </TableCell>
-                {metricNames
-                  .filter((metric) => chartData[metric]?.length)
-                  .map((metric) => (
-                    <TableCell key={`${metric}-${index}`} sx={{ py: 0.25 }}>
-                      {chartData[metric][index]?.actual ?? ""}
-                    </TableCell>
-                  ))}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                  </TableCell>
+                  {metricNames
+                    .filter((metric) => chartData[metric]?.length)
+                    .map((metric) => {
+                      // Find the matching record for this metric based on workflow_id and other identifying properties
+                      const matchingRecord = chartData[metric].find(
+                        (record: any) =>
+                          record.workflow_id === entry.workflow_id &&
+                          record.job_id === entry.job_id &&
+                          record.model === entry.model &&
+                          record.device === entry.device &&
+                          record.dtype === entry.dtype
+                      );
+                      return (
+                        <TableCell key={`${metric}-${index}`} sx={{ py: 0.25 }}>
+                          {chartData[metric][index]?.actual ??
+                            matchingRecord?.actual ??
+                            ""}
+                        </TableCell>
+                      );
+                    })}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </>
   );
 };
 
@@ -416,10 +475,12 @@ const MetricTable = ({
 function formGraphItem(data: any[]) {
   const res: any[] = [];
   data.forEach((item) => {
-    const deviceId = item.metadata_info.device_id;
+    const deviceId = item?.metadata_info?.device_id;
     const displayName = item.display;
     const group_key =
-      deviceId !== "" ? `${displayName} (${deviceId})` : displayName;
+      deviceId && deviceId !== ""
+        ? `${displayName} (${deviceId})`
+        : displayName;
     const seriesData = deepClone(item);
     seriesData.group_key = group_key;
     res.push(seriesData);

@@ -1,6 +1,6 @@
 import { Button, styled } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import LoadingPage from "components/LoadingPage";
+import LoadingPage from "components/common/LoadingPage";
 import SingleValueGauge from "components/utilization/components/SingleValueGauge";
 import { fetcher } from "lib/GeneralUtils";
 import {
@@ -47,6 +47,8 @@ const WorkflowUtilization = () => {
       ...stats,
     };
   });
+
+  console.log(rows);
 
   const columns: any[] = [
     { field: "name", headerName: "Job Name", width: 400 },
@@ -123,7 +125,6 @@ const WorkflowUtilization = () => {
       </MetadataGroupSection>
 
       <h2> Job Utilization Summary Table</h2>
-      <span>Utilization metrics above 60% is highlighted</span>
       <div style={{ height: "1000px", width: "100%" }}>
         <DataGrid rows={rows} columns={columns} pageSizeOptions={[90]} />
       </div>

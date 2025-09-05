@@ -1,5 +1,5 @@
 import { Octokit } from "octokit";
-import useSWR from "swr";
+import useSWR, { SWRConfiguration } from "swr";
 import useSWRImmutable from "swr/immutable";
 import { isFailure } from "./JobClassifierUtil";
 import { CommitData, JobData } from "./types";
@@ -16,8 +16,18 @@ class ErrorWithStatusCode extends Error {
 
 export function includesCaseInsensitive(
   value: string,
-  pattern: string
+  pattern: string,
+  useRegex: boolean
 ): boolean {
+  if (useRegex) {
+    try {
+      const regex = new RegExp(pattern, "i");
+      return regex.test(value);
+    } catch (error) {
+      console.error("Invalid regex pattern:", error);
+      return false;
+    }
+  }
   return value.toLowerCase().includes(pattern.toLowerCase());
 }
 
@@ -112,7 +122,8 @@ export async function hasWritePermissionsUsingOctokit(
 export function useClickHouseAPI<T = any>(
   queryName: string,
   parameters: { [key: string]: string },
-  condition: boolean = true
+  condition: boolean = true,
+  config?: SWRConfiguration<T[]>
 ) {
   // Helper function to format the URL nicely
   return useSWR<T[]>(
@@ -120,7 +131,8 @@ export function useClickHouseAPI<T = any>(
       `/api/clickhouse/${encodeURIComponent(queryName)}?${encodeParams({
         parameters: JSON.stringify(parameters),
       })}`,
-    fetcher
+    fetcher,
+    config
   );
 }
 
@@ -140,7 +152,7 @@ export function useClickHouseAPI<T = any>(
  */
 export function useClickHouseAPIImmutable<T = any>(
   queryName: string,
-  parameters: { [key: string]: string },
+  parameters: { [key: string]: any },
   condition: boolean = true
 ) {
   // Helper function to format the URL nicely

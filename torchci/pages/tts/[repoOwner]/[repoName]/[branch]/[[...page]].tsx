@@ -1,14 +1,17 @@
-import { Grid2, Paper, Stack, Typography } from "@mui/material";
+import { Grid, Paper, Stack, Typography } from "@mui/material";
 import CheckBoxList from "components/common/CheckBoxList";
-import CopyLink from "components/CopyLink";
-import GranularityPicker from "components/GranularityPicker";
-import LoadingPage from "components/LoadingPage";
+import CopyLink from "components/common/CopyLink";
+import GranularityPicker from "components/common/GranularityPicker";
+import LoadingPage from "components/common/LoadingPage";
+import {
+  durationDisplay,
+  formatTimeForCharts,
+} from "components/common/TimeUtils";
 import {
   getTooltipMarker,
   Granularity,
   seriesWithInterpolatedTimes,
 } from "components/metrics/panels/TimeSeriesPanel";
-import { durationDisplay, formatTimeForCharts } from "components/TimeUtils";
 import dayjs from "dayjs";
 import { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
@@ -81,8 +84,6 @@ export default function Page() {
   const repoOwner: string = (router.query.repoOwner as string) ?? "pytorch";
   const repoName: string = (router.query.repoName as string) ?? "pytorch";
   const branch: string = (router.query.branch as string) ?? "main";
-  const jobNamesCompressed: string =
-    (router.query.jobNamesCompressed as string) ?? "";
   const [startTime, setStartTime] = useState(dayjs().subtract(1, "week"));
   const [stopTime, setStopTime] = useState(dayjs());
   const [granularity, setGranularity] = useState<Granularity>("day");
@@ -91,6 +92,58 @@ export default function Page() {
   const [selectedJobs, setSelectedJobs] = useState<{
     [key: string]: boolean;
   }>({});
+
+  useEffect(() => {
+    if (router.query.jobName) {
+      setSelectedJobs((prev) => ({
+        ...prev,
+        [router.query.jobName as string]: true,
+      }));
+    }
+    if (router.query.startTime) {
+      setStartTime(dayjs(router.query.startTime as string));
+    }
+    if (router.query.stopTime) {
+      setStopTime(dayjs(router.query.stopTime as string));
+    }
+    if (router.query.granularity) {
+      setGranularity(router.query.granularity as string as Granularity);
+    }
+    if (router.query.timeRange) {
+      setTimeRange(parseInt(router.query.timeRange as string) || 7);
+    }
+    if (router.query.ttsPercentile) {
+      setTtsPercentile(parseFloat(router.query.ttsPercentile as string) || 0.5);
+    }
+
+    const jobNamesFromLink = JSON.parse(
+      router.query.jobNamesCompressed
+        ? decompressFromEncodedURIComponent(
+            router.query.jobNamesCompressed as string
+          )
+        : "[]"
+    );
+
+    if (router.query.jobName) {
+      jobNamesFromLink.push(router.query.jobName as string);
+    }
+
+    if (tts_true_series.length > 0) {
+      setSelectedJobs(
+        tts_true_series.reduce((acc: any, item: any) => {
+          acc[item.name] = jobNamesFromLink.includes(item.name);
+          return acc;
+        }, {} as any)
+      );
+    } else {
+      setSelectedJobs(
+        jobNamesFromLink.reduce((acc: any, item: any) => {
+          acc[item] = true;
+          return acc;
+        }, {} as any)
+      );
+    }
+  }, [router.query]);
 
   const GRAPHS_HEIGHT = 800;
 
@@ -124,6 +177,19 @@ export default function Page() {
     fetcher
   );
 
+  useEffect(() => {
+    if (data != undefined) {
+      const jobNames = data.map((item) => item.full_name);
+      setSelectedJobs((prev) => {
+        const newJobs = jobNames.reduce((acc: any, jobName: string) => {
+          acc[jobName] = false;
+          return acc;
+        }, {});
+        return { ...newJobs, ...prev };
+      });
+    }
+  }, [data]);
+
   const timeFieldName = "granularity_bucket";
   const groupByFieldName = "full_name";
   const tts_true_series = seriesWithInterpolatedTimes(
@@ -152,34 +218,6 @@ export default function Page() {
     (item: any) => selectedJobs[item["name"]]
   );
 
-  useEffect(() => {
-    const jobNamesFromLink = JSON.parse(
-      jobNamesCompressed != ""
-        ? decompressFromEncodedURIComponent(jobNamesCompressed)
-        : "[]"
-    );
-
-    if (router.query.jobName) {
-      jobNamesFromLink.push(router.query.jobName as string);
-    }
-
-    if (tts_true_series.length > 0) {
-      setSelectedJobs(
-        tts_true_series.reduce((acc: any, item: any) => {
-          acc[item.name] = jobNamesFromLink.includes(item.name);
-          return acc;
-        }, {} as any)
-      );
-    } else {
-      setSelectedJobs(
-        jobNamesFromLink.reduce((acc: any, item: any) => {
-          acc[item] = true;
-          return acc;
-        }, {} as any)
-      );
-    }
-  }, [data, jobNamesCompressed, router.query.jobName]);
-
   const permalink =
     typeof window !== "undefined" &&
     `${window.location.protocol}/${window.location.host}${router.asPath.replace(
@@ -191,6 +229,11 @@ export default function Page() {
           Object.keys(selectedJobs).filter((key) => selectedJobs[key])
         )
       ),
+      startTime: startTime.utc().format("YYYY-MM-DDTHH:mm:ss.SSS"),
+      stopTime: stopTime.utc().format("YYYY-MM-DDTHH:mm:ss.SSS"),
+      granularity: granularity,
+      timeRange: timeRange.toString(),
+      ttsPercentile: ttsPercentile.toString(),
     })}`;
 
   return (
@@ -217,8 +260,8 @@ export default function Page() {
         />
         <CopyLink textToCopy={permalink || ""} />
       </Stack>
-      <Grid2 container spacing={2}>
-        <Grid2 size={{ xs: 9 }} height={GRAPHS_HEIGHT}>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 9 }} height={GRAPHS_HEIGHT}>
           {error !== undefined ? (
             <Typography>
               error occured while fetching data, perhaps there are too many
@@ -236,15 +279,15 @@ export default function Page() {
               </Paper>
             </Stack>
           )}
-        </Grid2>
-        <Grid2 size={{ xs: 3 }} height={GRAPHS_HEIGHT} overflow={"auto"}>
+        </Grid>
+        <Grid size={{ xs: 3 }} height={GRAPHS_HEIGHT} overflow={"auto"}>
           <CheckBoxList
             items={selectedJobs}
             onChange={setSelectedJobs}
             onClick={(_val) => {}}
           />
-        </Grid2>
-      </Grid2>
+        </Grid>
+      </Grid>
     </div>
   );
 }

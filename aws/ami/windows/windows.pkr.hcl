@@ -68,15 +68,6 @@ build {
     ]
   }
 
-  # Install the Visual Studio 2019
-  provisioner "powershell" {
-    environment_vars = ["INSTALL_WINDOWS_SDK=1", "VS_YEAR=2019", "VS_VERSION=16.11.21", "VS_UNINSTALL_PREVIOUS=1"]
-    execution_policy = "unrestricted"
-    scripts = [
-      "${path.root}/scripts/Installers/Install-VS.ps1",
-    ]
-  }
-
   # Install the Visual Studio 2022
   provisioner "powershell" {
     environment_vars = ["INSTALL_WINDOWS_SDK=1", "VS_YEAR=2022", "VS_VERSION=17.4.1", "VS_UNINSTALL_PREVIOUS=0"]
@@ -100,20 +91,6 @@ build {
   }
 
   provisioner "powershell" {
-    environment_vars = ["CUDA_VERSION=11.8"]
-    scripts = [
-      "${path.root}/scripts/Installers/Install-CUDA-Tools.ps1",
-    ]
-  }
-
-  provisioner "powershell" {
-    environment_vars = ["CUDA_VERSION=12.4"]
-    scripts = [
-      "${path.root}/scripts/Installers/Install-CUDA-Tools.ps1",
-    ]
-  }
-
-  provisioner "powershell" {
     environment_vars = ["CUDA_VERSION=12.6"]
     scripts = [
       "${path.root}/scripts/Installers/Install-CUDA-Tools.ps1",
@@ -122,6 +99,20 @@ build {
 
   provisioner "powershell" {
     environment_vars = ["CUDA_VERSION=12.8"]
+    scripts = [
+      "${path.root}/scripts/Installers/Install-CUDA-Tools.ps1",
+    ]
+  }
+
+  provisioner "powershell" {
+    environment_vars = ["CUDA_VERSION=12.9"]
+    scripts = [
+      "${path.root}/scripts/Installers/Install-CUDA-Tools.ps1",
+    ]
+  }
+
+  provisioner "powershell" {
+    environment_vars = ["CUDA_VERSION=13.0"]
     scripts = [
       "${path.root}/scripts/Installers/Install-CUDA-Tools.ps1",
     ]

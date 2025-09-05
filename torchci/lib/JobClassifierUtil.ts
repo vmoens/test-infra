@@ -1,4 +1,4 @@
-import { GroupedJobStatus, JobStatus } from "components/GroupJobConclusion";
+import { GroupedJobStatus, JobStatus } from "components/job/GroupJobConclusion";
 import { getOpenUnstableIssues } from "lib/jobUtils";
 import { IssueData, RowData } from "./types";
 
@@ -27,6 +27,8 @@ const GROUP_MAC = "Mac";
 const GROUP_PARALLEL = "Parallel";
 const GROUP_DOCS = "Docs";
 const GROUP_LIBTORCH = "Libtorch";
+const GROUP_OTHER_VIABLE_STRICT_BLOCKING = "Other viable/strict blocking";
+const GROUP_XPU = "XPU";
 const GROUP_OTHER = "other";
 
 // Jobs will be grouped with the first regex they match in this list
@@ -46,6 +48,10 @@ export const groups = [
   {
     regex: /unstable/,
     name: GROUP_UNSTABLE,
+  },
+  {
+    regex: /^xpu/,
+    name: GROUP_XPU,
   },
   {
     regex: /inductor-periodic/,
@@ -138,6 +144,12 @@ export const groups = [
     regex: /libtorch/,
     name: GROUP_LIBTORCH,
   },
+  {
+    // This is a catch-all for jobs that are viable but strict blocking
+    // Excluding linux-binary-* jobs because they are already grouped further up
+    regex: /(pull)|(trunk)/,
+    name: GROUP_OTHER_VIABLE_STRICT_BLOCKING,
+  },
 ];
 
 // Jobs on HUD home page will be sorted according to this list, with anything left off at the end
@@ -149,7 +161,9 @@ const HUD_GROUP_SORTING = [
   GROUP_IOS,
   GROUP_MAC,
   GROUP_ROCM,
+  GROUP_XPU,
   GROUP_XLA,
+  GROUP_OTHER_VIABLE_STRICT_BLOCKING, // placed after the last group that tends to have viable/strict blocking jobs
   GROUP_PARALLEL,
   GROUP_LIBTORCH,
   GROUP_ANDROID,
@@ -164,10 +178,11 @@ const HUD_GROUP_SORTING = [
   GROUP_INDUCTOR,
   GROUP_INDUCTOR_PERIODIC,
   GROUP_ANNOTATIONS_AND_LABELING,
-  GROUP_OTHER,
   GROUP_BINARY_WINDOWS,
   GROUP_MEMORY_LEAK_CHECK,
   GROUP_RERUN_DISABLED_TESTS,
+  // These two groups should always be at the end
+  GROUP_OTHER,
   GROUP_UNSTABLE,
 ];
 

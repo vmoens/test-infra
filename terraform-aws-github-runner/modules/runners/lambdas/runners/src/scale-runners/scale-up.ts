@@ -1,6 +1,6 @@
 import { Metrics, ScaleUpMetrics } from './metrics';
 import { Repo, getRepoKey, sleep } from './utils';
-import { RunnerType, RunnerInputParameters, createRunner, tryReuseRunner } from './runners';
+import { RunnerType, RunnerInputParameters, createRunner, tryReuseRunner, NoRunnersAvailable } from './runners';
 import {
   createRegistrationTokenOrg,
   createRegistrationTokenRepo,
@@ -65,10 +65,10 @@ export async function scaleUp(
   }
 
   const scaleConfigRepo = {
-    owner: repo.owner,
+    owner: Config.Instance.scaleConfigOrg || repo.owner,
     repo: Config.Instance.scaleConfigRepo || repo.repo,
   };
-  const runnerTypes = await getRunnerTypes(scaleConfigRepo, metrics);
+  const runnerTypes = await getRunnerTypes(scaleConfigRepo, repo, metrics);
   /* istanbul ignore next */
   const runnerLabels = payload?.runnerLabels ?? Array.from(runnerTypes.keys());
 
@@ -126,7 +126,11 @@ export async function scaleUp(
             await tryReuseRunner(createRunnerParams, metrics);
             continue; // Runner successfuly reused, no need to create a new one, continue to next runner
           } catch (e) {
-            console.error(`Error reusing runner: ${e}`);
+            if (e instanceof NoRunnersAvailable) {
+              console.info(`No runners available for reuse`);
+            } else {
+              console.error(`Error reusing runner: ${e}`);
+            }
           }
         }
 
@@ -317,7 +321,7 @@ function getMaximumAllowedScaleUpSize(
  *
  * The desired logic for scale ups is as follows:
  *   - Always stay below the maximum allowed instance count for the runner type
- *   - If the in coming request will bring us belo than minimum number of runners available,
+ *   - If the in coming request will bring us below than minimum number of runners available,
  *     overprovision by a bit to bring us closer to the minimum limit (to handle potential
  *     incoming traffic).
  *   - Only provision more runners if supporting the requested number of runners would
@@ -366,10 +370,12 @@ export function _calculateScaleUpAmount(
     // Never proactively scale up above the minimum limit
     extraScaleUp = Math.min(extraScaleUp, minRunnersUnderprovisionCount);
 
-    console.info(
-      `Available (${availableCount}) runners will be below minimum ${minRunners}. ` +
-        `Will provision ${extraScaleUp} extra runners`,
-    );
+    if (extraScaleUp > 0) {
+      console.info(
+        `Available (${availableCount}) runners will be below minimum ${minRunners}. ` +
+          `Will provision ${extraScaleUp} additional runners above the requested amount to serve as a buffer.`,
+      );
+    }
   }
 
   let scaleUpAmount = extraNeededToAcceptRequests + extraScaleUp;
@@ -381,6 +387,10 @@ export function _calculateScaleUpAmount(
 
     scaleUpAmount = maxScaleUp;
   }
+
+  console.info(
+    `Will provision a total of ${scaleUpAmount} runners to handle the requested amount of ${requestedCount} runners.`,
+  );
 
   return scaleUpAmount;
 }

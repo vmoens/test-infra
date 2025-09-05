@@ -1,6 +1,6 @@
 import {
   FormControl,
-  Grid2,
+  Grid,
   InputLabel,
   MenuItem,
   Paper,
@@ -13,19 +13,22 @@ import {
 import { GridRenderCellParams } from "@mui/x-data-grid";
 import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { durationDisplay } from "components/common/TimeUtils";
 import ScalarPanel, {
   ScalarPanelWithValue,
 } from "components/metrics/panels/ScalarPanel";
 import TablePanel from "components/metrics/panels/TablePanel";
 import TimeSeriesPanel from "components/metrics/panels/TimeSeriesPanel";
-import { durationDisplay } from "components/TimeUtils";
 import dayjs from "dayjs";
 import { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
 import { useDarkMode } from "lib/DarkModeContext";
 import { fetcher } from "lib/GeneralUtils";
 import { useEffect, useState } from "react";
-import useSWR from "swr";
+import { default as useSWR, default as useSWRImmutable } from "swr";
+
+const DISABLED_TESTS_CONDENSED_URL =
+  "https://raw.githubusercontent.com/pytorch/test-infra/refs/heads/generated-stats/stats/disabled-tests-condensed.json";
 
 function MasterCommitRedPanel({
   params,
@@ -203,8 +206,8 @@ export function TimeRangePicker({
   setStartTime: any;
   stopTime: dayjs.Dayjs;
   setStopTime: any;
-  timeRange: any;
-  setTimeRange: any;
+  timeRange: number;
+  setTimeRange: (_: number) => any;
   setGranularity?: any;
 }) {
   function updateTimeRange() {
@@ -319,7 +322,7 @@ export function TtsPercentilePicker({
           Percentile
         </InputLabel>
         <Select
-          defaultValue={ttsPercentile}
+          value={ttsPercentile}
           label="Percentile"
           labelId="tts-percentile-picker-select-label"
           onChange={handleChange}
@@ -430,7 +433,7 @@ function JobsDuration({
   }
 
   return (
-    <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+    <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
       <TTSPanel
         title={title}
         queryName={queryName}
@@ -439,7 +442,7 @@ function JobsDuration({
         metricHeaderName={metricHeaderName}
         branchName={branchName}
       />
-    </Grid2>
+    </Grid>
   );
 }
 
@@ -467,7 +470,14 @@ export default function Page() {
     JSON.stringify({
       ...timeParams,
       // TODO (huydhn): Figure out a way to have default parameters for ClickHouse queries
-      workflowNames: ["lint", "pull", "trunk"],
+      workflowNames: [
+        "lint",
+        "pull",
+        "trunk",
+        "linux-binary-libtorch-release",
+        "linux-binary-manywheel",
+        "linux-aarch64",
+      ],
     })
   )}`;
 
@@ -490,6 +500,10 @@ export default function Page() {
     "docs push / build-docs-functorch-true",
   ];
 
+  const disabledTestsTotal = Object.keys(
+    useSWRImmutable(DISABLED_TESTS_CONDENSED_URL, fetcher).data || {}
+  ).length;
+
   return (
     <div>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
@@ -510,12 +524,12 @@ export default function Page() {
         />
       </Stack>
 
-      <Grid2 container spacing={2}>
-        <Grid2 size={{ xs: 12, md: 6 }} height={ROW_HEIGHT}>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }} height={ROW_HEIGHT}>
           <MasterCommitRedPanel params={timeParams} />
-        </Grid2>
+        </Grid>
 
-        <Grid2
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -539,9 +553,9 @@ export default function Page() {
               badThreshold={(value) => value > 0.2}
             />
           </Stack>
-        </Grid2>
+        </Grid>
 
-        <Grid2
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -579,8 +593,8 @@ export default function Page() {
               badThreshold={(value) => value > 10}
             />
           </Stack>
-        </Grid2>
-        <Grid2
+        </Grid>
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -618,8 +632,8 @@ export default function Page() {
               badThreshold={(value) => value > 40}
             />
           </Stack>
-        </Grid2>
-        <Grid2
+        </Grid>
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -642,18 +656,16 @@ export default function Page() {
               }}
               badThreshold={(value) => value > 60 * 60 * 6} // 6 hours
             />
-            <ScalarPanel
+            <ScalarPanelWithValue
               title={"# disabled tests"}
-              queryName={"disabled_test_total"}
-              metricName={"number_of_open_disabled_tests"}
+              value={disabledTestsTotal}
               valueRenderer={(value) => value}
-              queryParams={{ state: "open" }}
               badThreshold={(_) => false} // we haven't decided on the threshold here yet
             />
           </Stack>
-        </Grid2>
+        </Grid>
 
-        <Grid2
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -681,9 +693,9 @@ export default function Page() {
               badThreshold={(value) => value > 3 * 24 * 60 * 60} // 3 day
             />
           </Stack>
-        </Grid2>
+        </Grid>
 
-        <Grid2
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -715,9 +727,9 @@ export default function Page() {
               badThreshold={(value) => value > 3 * 24 * 60 * 60} // 3 day
             />
           </Stack>
-        </Grid2>
+        </Grid>
 
-        <Grid2
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -745,9 +757,39 @@ export default function Page() {
               badThreshold={(_) => false}
             />
           </Stack>
-        </Grid2>
+        </Grid>
 
-        <Grid2
+        <Grid
+          container
+          size={{ xs: 6, md: 3, lg: 2 }}
+          justifyContent={"stretch"}
+        >
+          <Stack
+            justifyContent={"space-between"}
+            flexGrow={1}
+            flexWrap="wrap"
+            spacing={1}
+          >
+            <ScalarPanel
+              title={"Merge retry rate (avg)"}
+              queryName={"merge_retry_rate"}
+              metricName={"avg_retry_rate"}
+              valueRenderer={(value) => value.toFixed(2) + "x"}
+              queryParams={timeParams}
+              badThreshold={(value) => value > 2.0} // 2.0 average retries
+            />
+            <ScalarPanel
+              title={"PR landing time (avg)"}
+              queryName={"pr_landing_time_avg"}
+              metricName={"avg_hours"}
+              valueRenderer={(value) => value.toFixed(1) + "h"}
+              queryParams={timeParams}
+              badThreshold={(value) => value > 24} // 24 hours
+            />
+          </Stack>
+        </Grid>
+
+        <Grid
           container
           size={{ xs: 6, md: 3, lg: 2 }}
           justifyContent={"stretch"}
@@ -764,9 +806,9 @@ export default function Page() {
               workflowNames={["pull", "trunk"]}
             />
           </Stack>
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TablePanel
             title={"Queued Jobs by Machine Type"}
             queryName={"queued_jobs_by_label"}
@@ -778,14 +820,37 @@ export default function Page() {
                 headerName: "Queue time",
                 flex: 1,
                 valueFormatter: (params: number) => durationDisplay(params),
+                cellClassName: (params) => {
+                  const queueTimeHours = params.value / 3600;
+                  if (queueTimeHours >= 4) return "queue-time-red";
+                  if (queueTimeHours >= 1) return "queue-time-yellow";
+                  return "";
+                },
               },
               { field: "machine_type", headerName: "Machine Type", flex: 4 },
             ]}
-            dataGridProps={{ getRowId: (el: any) => el.machine_type }}
+            dataGridProps={{
+              getRowId: (el: any) => el.machine_type,
+              initialState: {
+                sorting: {
+                  sortModel: [{ field: "avg_queue_s", sort: "desc" }],
+                },
+              },
+              sx: {
+                "& .queue-time-yellow": {
+                  backgroundColor: "#B8860B", // Dark goldenrod
+                  color: "white",
+                },
+                "& .queue-time-red": {
+                  backgroundColor: "#B22222", // Fire brick red
+                  color: "white",
+                },
+              },
+            }}
           />
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TablePanel
             title={"Jobs in Queue"}
             queryName={"queued_jobs"}
@@ -816,9 +881,9 @@ export default function Page() {
               getRowId: (el: any) => el.html_url,
             }}
           />
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TimeSeriesPanel
             title={"Queue times historical"}
             queryName={"queue_times_historical"}
@@ -832,9 +897,9 @@ export default function Page() {
             yAxisFieldName={"avg_queue_s"}
             yAxisRenderer={durationDisplay}
           />
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TimeSeriesPanel
             title={"Workflow load per Day"}
             queryName={"workflow_load"}
@@ -846,7 +911,7 @@ export default function Page() {
             yAxisLabel={"workflows started"}
             yAxisRenderer={(value) => value}
           />
-        </Grid2>
+        </Grid>
 
         <JobsDuration
           title={"Job time-to-signal, all branches"}
@@ -884,7 +949,7 @@ export default function Page() {
           timeParams={timeParams}
         />
 
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TablePanel
             title={"Failed Jobs Log Classifications"}
             queryName={"log_captures_count"}
@@ -911,22 +976,22 @@ export default function Page() {
                 el.captures ? JSON.stringify(el.captures) : "null",
             }}
           />
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 6 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 6 }} height={ROW_HEIGHT}>
           <TimeSeriesPanel
             title={"Number of new disabled tests"}
             queryName={"disabled_test_historical"}
             queryParams={{ ...timeParams, repo: "pytorch/pytorch" }}
             granularity={"day"}
-            timeFieldName={"granularity_bucket"}
-            yAxisFieldName={"number_of_new_disabled_tests"}
+            timeFieldName={"day"}
+            yAxisFieldName={"new"}
             yAxisRenderer={(value) => value}
             additionalOptions={{ yAxis: { scale: true } }}
           />
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }}>
           <br />
           <br />
           <Typography variant="h3" gutterBottom>
@@ -936,9 +1001,9 @@ export default function Page() {
             These panels show the <b>delta</b> between states of the same job
             run on the Linux Foundation vs the Meta fleets.
           </p>
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 12 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 12 }} height={ROW_HEIGHT}>
           <TimeSeriesPanel
             title={"Percentage of jobs rolled over to Linux Foundation"}
             queryName={"lf_rollover_percentage"}
@@ -949,9 +1014,9 @@ export default function Page() {
             groupByFieldName={"fleet"}
             yAxisRenderer={(value) => value.toFixed(2).toString() + "%"}
           />
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }}>
           <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
             <Typography variant="h3" gutterBottom>
               Percentage of jobs running on experiment
@@ -965,9 +1030,9 @@ export default function Page() {
             This pannel shows the % of jobs that are running the selected
             experiment in the dropbox.
           </p>
-        </Grid2>
+        </Grid>
 
-        <Grid2 size={{ xs: 12 }} height={ROW_HEIGHT}>
+        <Grid size={{ xs: 12 }} height={ROW_HEIGHT}>
           <TimeSeriesPanel
             title={"Percentage of jobs running on experiment"}
             queryName={"experiment_rollover_percentage"}
@@ -982,8 +1047,8 @@ export default function Page() {
             groupByFieldName={"fleet"}
             yAxisRenderer={(value) => value.toFixed(2).toString() + "%"}
           />
-        </Grid2>
-      </Grid2>
+        </Grid>
+      </Grid>
     </div>
   );
 }

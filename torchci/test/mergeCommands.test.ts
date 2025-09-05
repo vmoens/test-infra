@@ -2,6 +2,7 @@ import { getFailureMessage, getMessage } from "lib/GeneralUtils";
 import nock from "nock";
 import * as probot from "probot";
 import pytorchBot from "../lib/bot/pytorchBot";
+import * as clickhouse from "../lib/clickhouse";
 import { handleScope, requireDeepCopy } from "./common";
 import * as utils from "./utils";
 
@@ -14,6 +15,9 @@ describe("merge-bot", () => {
     probot = utils.testProbot();
     probot.load(pytorchBot);
     utils.mockConfig("pytorch-probot.yml", "mergebot: True");
+    jest
+      .spyOn(clickhouse, "queryClickhouseSaved")
+      .mockImplementation(() => Promise.resolve([{ workflow_name: "pull" }]));
   });
 
   afterEach(() => {
@@ -637,7 +641,7 @@ describe("merge-bot", () => {
     const event = requireDeepCopy("./fixtures/pull_request_comment.json");
     const reason =
       "--breaks master: " +
-      "https://hud.pytorch.org/minihud?name_filter=trunk%20/%20ios-12-5-1-x86-64-coreml%20/%20build";
+      "https://hud.pytorch.org/pytorch/pytorch/main/1?name_filter=trunk%20/%20ios-12-5-1-x86-64-coreml%20/%20build";
 
     event.payload.comment.body = `@pytorchbot revert -m='${reason}' -c landrace`;
 

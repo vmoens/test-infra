@@ -85,10 +85,13 @@ export interface UtilizationAggreStats {
   memory_p90: number;
   gpu_max?: number;
   gpu_avg?: number;
-  gpu_memory_max?: number;
-  gpu_memory_avg?: number;
   gpu_p90?: number;
-  gpu_memmory_p90?: number;
+  gpu_memory_bandwidth_max?: number;
+  gpu_memory_bandwidth_avg?: number;
+  gpu_memory_bandwidth_p90?: number;
+  gpu_allocated_memory_max?: number;
+  gpu_allocated_memory_avg?: number;
+  gpu_allocated_memory_p90?: number;
 }
 
 /**
@@ -101,3 +104,26 @@ export interface ListUtilizationMetadataInfoAPIResponse {
   workflow_name?: string;
   metadata_list: UtilizationMetadataInfo[];
 }
+
+export interface ListUtilizationReportAPIResponse {
+  group_key?: string;
+  metadata_list?: any[];
+  min_time?: any;
+  max_time?: any;
+  error?: string;
+}
+
+export interface ListUtilizationReportParams {
+  repo?: string;
+  group_by?: string;
+  granularity?: string;
+  start_time?: string;
+  end_time?: string;
+  parent_group?: string;
+}
+
+export const EMPTY_LIST_UTILIZATION_SUMMARY_API_RESPONSE: ListUtilizationReportAPIResponse =
+  {
+    group_key: "",
+    metadata_list: [],
+  };

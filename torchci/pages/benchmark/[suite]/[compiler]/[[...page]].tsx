@@ -1,4 +1,4 @@
-import { Divider, Grid2, Skeleton, Stack, Typography } from "@mui/material";
+import { Divider, Grid, Skeleton, Stack, Typography } from "@mui/material";
 import { BranchAndCommitPicker } from "components/benchmark/BranchAndCommitPicker";
 import { CommitPanel } from "components/benchmark/CommitPanel";
 import {
@@ -12,6 +12,7 @@ import { BenchmarkLogs } from "components/benchmark/compilers/BenchmarkLogs";
 import {
   COMPILER_NAMES_TO_DISPLAY_NAMES,
   DEFAULT_DEVICE_NAME,
+  DISPLAY_NAMES_TO_ARCH_NAMES,
   DISPLAY_NAMES_TO_DEVICE_NAMES,
   DISPLAY_NAMES_TO_WORKFLOW_NAMES,
   DTYPES,
@@ -25,14 +26,11 @@ import {
   MODES,
 } from "components/benchmark/ModeAndDTypePicker";
 import { QUANTIZATIONS } from "components/benchmark/torchao/common";
-import CopyLink from "components/CopyLink";
-import GranularityPicker from "components/GranularityPicker";
+import CopyLink from "components/common/CopyLink";
+import GranularityPicker from "components/common/GranularityPicker";
 import { Granularity } from "components/metrics/panels/TimeSeriesPanel";
 import dayjs from "dayjs";
-import {
-  augmentData,
-  convertToCompilerPerformanceData,
-} from "lib/benchmark/compilerUtils";
+import { convertToCompilerPerformanceData } from "lib/benchmark/compilerUtils";
 import { fetcher } from "lib/GeneralUtils";
 import { BranchAndCommit, CompilerPerformanceData } from "lib/types";
 import { useRouter } from "next/router";
@@ -84,13 +82,12 @@ function Report({
   let { data: lData, error: _lError } = useSWR(lUrl, fetcher, {
     refreshInterval: 60 * 60 * 1000, // refresh every hour
   });
-  // TODO (huydhn): Remove this once TorchInductor dashboard is migrated to the
-  // new database schema
-  lData =
-    dashboard === "torchao" ? convertToCompilerPerformanceData(lData) : lData;
-  lData = augmentData(lData);
+  lData = convertToCompilerPerformanceData(lData);
   lData = lData
-    ? lData.filter((e: CompilerPerformanceData) => e.suite === suite)
+    ? lData.filter(
+        (e: CompilerPerformanceData) =>
+          e.suite === suite && e.compiler === compiler
+      )
     : lData;
 
   const queryParamsWithR: { [key: string]: any } = {
@@ -106,13 +103,12 @@ function Report({
   let { data: rData, error: _rError } = useSWR(rUrl, fetcher, {
     refreshInterval: 60 * 60 * 1000, // refresh every hour
   });
-  // TODO (huydhn): Remove this once TorchInductor dashboard is migrated to the
-  // new database schema
-  rData =
-    dashboard === "torchao" ? convertToCompilerPerformanceData(rData) : rData;
-  rData = augmentData(rData);
+  rData = convertToCompilerPerformanceData(rData);
   rData = rData
-    ? rData.filter((e: CompilerPerformanceData) => e.suite === suite)
+    ? rData.filter(
+        (e: CompilerPerformanceData) =>
+          e.suite === suite && e.compiler === compiler
+      )
     : rData;
 
   if (lData === undefined || lData.length === 0) {
@@ -279,8 +275,6 @@ export default function Page() {
     return <Skeleton variant={"rectangular"} height={"100%"} />;
   }
 
-  // TODO (huydhn): Remove this once TorchInductor dashboard is migrated to the
-  // new database schema
   const queryParams: { [key: string]: any } =
     dashboard === "torchao"
       ? {
@@ -301,8 +295,8 @@ export default function Page() {
           commits: [],
           compilers: [compiler],
           device: DISPLAY_NAMES_TO_DEVICE_NAMES[deviceName],
-          dtypes: dtype,
-          getJobId: false,
+          arch: DISPLAY_NAMES_TO_ARCH_NAMES[deviceName],
+          dtype: dtype,
           granularity: granularity,
           mode: mode,
           startTime: dayjs(startTime).utc().format("YYYY-MM-DDTHH:mm:ss.SSS"),
@@ -395,7 +389,7 @@ export default function Page() {
         />
       </Stack>
 
-      <Grid2 size={{ xs: 12 }}>
+      <Grid size={{ xs: 12 }}>
         <Report
           dashboard={dashboard}
           queryName={queryName}
@@ -412,7 +406,7 @@ export default function Page() {
           lBranchAndCommit={{ branch: lBranch, commit: lCommit }}
           rBranchAndCommit={{ branch: rBranch, commit: rCommit }}
         />
-      </Grid2>
+      </Grid>
     </div>
   );
 }

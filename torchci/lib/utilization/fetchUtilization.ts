@@ -9,9 +9,9 @@ import {
   UtilizationParams,
 } from "./types";
 
-const UTIL_TS_QUERY_FOLDER_NAME = "oss_ci_util_ts";
+const UTIL_TS_QUERY_FOLDER_NAME = "oss_ci_util/oss_ci_util_ts";
 const UTILIZATION_TYPE = "utilization";
-const UTIL_METADATA_QUERY_FOLDER_NAME = "oss_ci_util_metadata";
+const UTIL_METADATA_QUERY_FOLDER_NAME = "oss_ci_util/oss_ci_util_metadata";
 
 export default async function fetchUtilization(
   params: UtilizationParams
@@ -99,7 +99,9 @@ function getDisplayName(name: string) {
   }
   if (tags[0].toLowerCase().includes("gpu")) {
     if (name.includes("mem_util")) {
-      return `gpu_${tags[1]}_mem`;
+      return `gpu_${tags[1]}_mem_bandwidth`;
+    } else if (name.includes("allocated_mem_percent")) {
+      return `gpu_${tags[1]}_allocated_mem_percent`;
     }
     return `gpu_${tags[1]}_util`;
   }

@@ -2,14 +2,17 @@ import {
   Button as _Button,
   Stack as _Stack,
   Box,
-  Grid2,
+  Grid,
   Typography,
 } from "@mui/material";
 import { BarChart } from "@mui/x-charts";
 import CheckBoxList from "components/common/CheckBoxList";
-import LoadingPage from "components/LoadingPage";
+import LoadingPage from "components/common/LoadingPage";
+import {
+  durationDisplay,
+  formatTimeForCharts,
+} from "components/common/TimeUtils";
 import { TimeSeriesPanelWithData } from "components/metrics/panels/TimeSeriesPanel";
-import { durationDisplay, formatTimeForCharts } from "components/TimeUtils";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import { useClickHouseAPIImmutable } from "lib/GeneralUtils";
@@ -254,7 +257,7 @@ export default function Page() {
 
     function Panel({ field }: { field: string }) {
       return (
-        <Grid2 size={{ xs: 4 }} key={field} height={200}>
+        <Grid size={{ xs: 4 }} key={field} height={200}>
           <TimeSeriesPanelWithData
             data={_.sortBy(selectedBuildSccacheStats, "bucket")}
             series={suffixes.map((suffix) => ({
@@ -285,7 +288,7 @@ export default function Page() {
               },
             }}
           />
-        </Grid2>
+        </Grid>
       );
     }
 
@@ -295,14 +298,14 @@ export default function Page() {
         {_(groups)
           .sortBy("displayOrder")
           .map((group) => (
-            <Grid2 size={{ xs: 12 }} key={group.name}>
+            <Grid size={{ xs: 12 }} key={group.name}>
               <Typography variant="h6">{group.name}</Typography>
-              <Grid2 container spacing={2}>
+              <Grid container spacing={2}>
                 {groupedFields[group.name]?.map((field: string) => (
                   <Panel field={field} key={field} />
                 ))}
-              </Grid2>
-            </Grid2>
+              </Grid>
+            </Grid>
           ))
           .value()}
       </Stack>
@@ -323,8 +326,8 @@ export default function Page() {
           setTimeRange={setTimeRange}
         />
       </Stack>
-      <Grid2 container spacing={2}>
-        <Grid2 size={{ xs: 10 }}>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 10 }}>
           {stepsDataIsLoading ? (
             <LoadingPage height={400} />
           ) : (
@@ -343,15 +346,15 @@ export default function Page() {
               BuildTimesChart
             )}
           </Box>
-        </Grid2>
-        <Grid2 size={{ xs: 2 }} style={{ overflowY: "scroll", maxHeight: 800 }}>
+        </Grid>
+        <Grid size={{ xs: 2 }} style={{ overflowY: "scroll", maxHeight: 800 }}>
           <CheckBoxList
             items={selectedJobs}
             onChange={setSelectedJobs}
             onClick={setSelectedBuild}
           />
-        </Grid2>
-        <Grid2 size={{ xs: 12 }}>
+        </Grid>
+        <Grid size={{ xs: 12 }}>
           <Stack>
             <Box>
               <Button onClick={() => setOpenSccacheStats(!openSccacheStats)}>
@@ -365,8 +368,8 @@ export default function Page() {
                 SccacheStats
               ))}
           </Stack>
-        </Grid2>
-      </Grid2>
+        </Grid>
+      </Grid>
     </Stack>
   );
 }

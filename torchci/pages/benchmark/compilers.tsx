@@ -11,6 +11,7 @@ import {
   DEFAULT_DEVICE_NAME,
   DEFAULT_HIGHLIGHT_KEY,
   DISPLAY_KEYS_TO_HIGHLIGHT,
+  DISPLAY_NAMES_TO_ARCH_NAMES,
   DISPLAY_NAMES_TO_DEVICE_NAMES,
   DISPLAY_NAMES_TO_WORKFLOW_NAMES,
   DTYPES,
@@ -24,11 +25,11 @@ import {
   ModePicker,
   MODES,
 } from "components/benchmark/ModeAndDTypePicker";
-import CopyLink from "components/CopyLink";
-import GranularityPicker from "components/GranularityPicker";
+import CopyLink from "components/common/CopyLink";
+import GranularityPicker from "components/common/GranularityPicker";
 import { Granularity } from "components/metrics/panels/TimeSeriesPanel";
 import dayjs from "dayjs";
-import { augmentData } from "lib/benchmark/compilerUtils";
+import { convertToCompilerPerformanceData } from "lib/benchmark/compilerUtils";
 import { fetcher } from "lib/GeneralUtils";
 import { BranchAndCommit } from "lib/types";
 import { useRouter } from "next/router";
@@ -75,7 +76,7 @@ function Report({
   let { data: lData, error: _lError } = useSWR(lUrl, fetcher, {
     refreshInterval: 60 * 60 * 1000, // refresh every hour
   });
-  lData = augmentData(lData);
+  lData = convertToCompilerPerformanceData(lData);
 
   const queryParamsWithR: { [key: string]: any } = {
     ...queryParams,
@@ -89,7 +90,7 @@ function Report({
   let { data: rData, error: _rError } = useSWR(rUrl, fetcher, {
     refreshInterval: 60 * 60 * 1000, // refresh every hour
   });
-  rData = augmentData(rData);
+  rData = convertToCompilerPerformanceData(rData);
 
   if (
     lData === undefined ||
@@ -255,9 +256,9 @@ export default function Page() {
   const queryParams: { [key: string]: any } = {
     commits: [],
     compilers: [],
+    arch: DISPLAY_NAMES_TO_ARCH_NAMES[deviceName],
     device: DISPLAY_NAMES_TO_DEVICE_NAMES[deviceName],
-    dtypes: dtype,
-    getJobId: false,
+    dtype: dtype,
     granularity: granularity,
     mode: mode,
     startTime: dayjs(startTime).utc().format("YYYY-MM-DDTHH:mm:ss.SSS"),
