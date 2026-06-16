@@ -86,7 +86,7 @@ XPU = "xpu"
 
 CURRENT_NIGHTLY_VERSION = "2.11.0"
 CURRENT_CANDIDATE_VERSION = "2.11.0"
-CURRENT_STABLE_VERSION = "2.10.0"
+CURRENT_STABLE_VERSION = "2.11.0"
 CURRENT_VERSION = CURRENT_STABLE_VERSION
 
 # By default use Nightly for CUDA arches
@@ -197,7 +197,7 @@ def initialize_globals(
         },
         CPU: "pytorch/manylinux2_28-builder:cpu",
         XPU: "pytorch/manylinux2_28-builder:xpu",
-        CPU_AARCH64: "pytorch/manylinux2_28_aarch64-builder:cpu-aarch64",
+        CPU_AARCH64: "pytorch/manylinux2_28_aarch64-builder@sha256:0b69284fa678717884b1c7315bf4fcfb571e70db366589dc21d147806a58a6d4",
     }
     LIBTORCH_CONTAINER_IMAGES = {
         **{
